@@ -1,0 +1,32 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Django stuff:
+*.log
+local_settings.py
+db.sqlite3
+media/
+
+# IDE stuff:
+.idea/
+.vscode/
+*.swp
+*.DS_Store
+
+# Frontend stuff:
+node_modules/
+
+# Environment stuff:
+.env
+.venv/
+venv/
+env/
+
+# Virtual environment
+kindergarten_system/venv/
+kindergarten_system/kindergarten_system/venv/
+
+# Other stuff:
+*.bak
