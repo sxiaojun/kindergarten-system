@@ -7,23 +7,21 @@ set -e  # 遇到错误时停止执行
 echo "开始部署幼儿园管理系统..."
 
 # 检查 Docker 是否安装
-if ! command -v docker &> /dev/null
-then
+if ! command -v docker >/dev/null 2>&1; then
     echo "错误: 未检测到 Docker，请先安装 Docker"
     exit 1
 fi
 
 # 检查 Docker Compose 是否安装
-if ! command -v docker-compose &> /dev/null
-then
+if ! command -v docker-compose >/dev/null 2>&1; then
     echo "错误: 未检测到 Docker Compose，请先安装 Docker Compose"
     exit 1
 fi
 
-# 进入项目目录
-cd /home/root/kindergarten-system
+echo "Docker 版本: $(docker --version)"
+echo "Docker Compose 版本: $(docker-compose --version)"
 
-# 检查必要的文件是否存在
+# 检查必要的文件是否存在（相对于当前目录）
 echo "检查必需的配置文件..."
 if [ ! -f "docker-compose.yml" ]; then
     echo "错误: docker-compose.yml 文件不存在"
