@@ -95,14 +95,17 @@ WSGI_APPLICATION = 'kindergarten_system.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',
-        'NAME': 'kindergarten_db',           # 数据库名称
-        'USER': '',       # MySQL用户名
-        'PASSWORD': '',   # MySQL密码
-        'HOST': 'localhost',                 # 数据库主机
-        'PORT': '3306',                      # 数据库端口
+        'NAME': os.environ.get('DATABASE_NAME', 'kindergarten_db'),
+        'USER': os.environ.get('DATABASE_USER', 'kindergarten_user'),
+        'PASSWORD': os.environ.get('DATABASE_PASSWORD', 'kindergarten_password'),
+        'HOST': os.environ.get('DATABASE_HOST', 'localhost'),
+        'PORT': os.environ.get('DATABASE_PORT', '3306'),
         'OPTIONS': {
             'charset': 'utf8mb4',
-            'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
+        },
+        'TEST': {
+            'CHARSET': 'utf8mb4',
+            'COLLATION': 'utf8mb4_unicode_ci',
         },
     }
 }
