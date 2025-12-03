@@ -57,8 +57,8 @@ fi
 
 echo "所有必需文件检查通过!"
 
-# 停止并删除现有的容器（如果有的话）
-echo "停止并删除现有容器..."
+# 停止并删除当前项目的容器（如果有的话）
+echo "停止并删除当前项目的容器..."
 docker-compose down
 
 # 构建并启动所有服务
@@ -68,6 +68,14 @@ docker-compose up --build -d
 # 等待服务启动
 echo "等待服务启动..."
 sleep 30
+
+# 运行数据库迁移
+echo "运行数据库迁移..."
+docker-compose exec backend python manage.py migrate
+
+# 收集静态文件
+echo "收集静态文件..."
+docker-compose exec backend python manage.py collectstatic --noinput
 
 # 检查服务状态
 echo "检查服务状态..."
@@ -79,6 +87,5 @@ echo "- 前端页面: http://your_server_ip"
 echo "- 后端API: http://your_server_ip/api/"
 echo "- 管理后台: http://your_server_ip/admin/"
 
-echo "注意：首次运行时，您可能需要创建超级用户账户。"
-echo "可以使用以下命令创建："
+echo "注意：如果您需要创建超级用户账户，请运行："
 echo "docker-compose exec backend python manage.py createsuperuser"
