@@ -1,7 +1,11 @@
 from django.db import models
 from django.utils import timezone
 from django.core.exceptions import ValidationError
+# 在 views.py 或其他文件中
+from common.logger import get_logger
 
+# 获取当前模块的日志记录器
+logger = get_logger(__name__)
 # 教师模型
 class Teacher(models.Model):
     """
