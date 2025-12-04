@@ -92,32 +92,32 @@ WSGI_APPLICATION = 'kindergarten_system.wsgi.application'
 #         'NAME': BASE_DIR / 'db.sqlite3',
 #     }
 # }
-# DATABASES = {
-#     'default': {
-#         'ENGINE': 'django.db.backends.mysql',
-#         'NAME': os.environ.get('DATABASE_NAME', 'kindergarten_db'),
-#         'USER': os.environ.get('DATABASE_USER', 'kindergarten_user'),
-#         'PASSWORD': os.environ.get('DATABASE_PASSWORD', 'kindergarten_password'),
-#         'HOST': os.environ.get('DATABASE_HOST', 'localhost'),
-#         'PORT': os.environ.get('DATABASE_PORT', '3306'),
-#         'OPTIONS': {
-#             'charset': 'utf8mb4',
-#         }
-#     }
-# }
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',
-        'NAME': 'kindergarten_db',
-        'USER': 'kindergarten_user',
-        'PASSWORD': 'kindergarten_password',
-        'HOST': '116.205.174.147',
-        'PORT': '3306',
+        'NAME': os.environ.get('DATABASE_NAME', 'kindergarten_db'),
+        'USER': os.environ.get('DATABASE_USER', 'kindergarten_user'),
+        'PASSWORD': os.environ.get('DATABASE_PASSWORD', 'kindergarten_password'),
+        'HOST': os.environ.get('DATABASE_HOST', 'localhost'),
+        'PORT': os.environ.get('DATABASE_PORT', '3306'),
         'OPTIONS': {
             'charset': 'utf8mb4',
         }
     }
 }
+# DATABASES = {
+#     'default': {
+#         'ENGINE': 'django.db.backends.mysql',
+#         'NAME': 'kindergarten_db',
+#         'USER': 'kindergarten_user',
+#         'PASSWORD': 'kindergarten_password',
+#         'HOST': '116.205.174.147',
+#         'PORT': '3306',
+#         'OPTIONS': {
+#             'charset': 'utf8mb4',
+#         }
+#     }
+# }
 
 # Password validation
 # https://docs.djangoproject.com/en/4.2/ref/settings/#auth-password-validators
