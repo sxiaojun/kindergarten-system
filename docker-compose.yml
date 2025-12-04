@@ -1,21 +1,27 @@
-version: '3.8'
-
 services:
   db:
-    image: mysql:5.7
+    image: mysql:8.0
+    ports:
+      - "3306:3306"  # 添加这一行将数据库端口暴露给宿主机
     environment:
       MYSQL_DATABASE: kindergarten_db
       MYSQL_USER: kindergarten_user
       MYSQL_PASSWORD: kindergarten_password
       MYSQL_ROOT_PASSWORD: root_password
+      MYSQL_CHARACTER_SET_SERVER: utf8mb4
+      MYSQL_COLLATION_SERVER: utf8mb4_unicode_ci
+      TZ: Asia/Shanghai
     volumes:
       - mysql_data:/var/lib/mysql
+    command: --default-authentication-plugin=mysql_native_password --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
     restart: always
 
   backend:
     build:
       context: .
       dockerfile: Dockerfile.backend
+      args:
+        PIP_INDEX_URL: "https://pypi.tuna.tsinghua.edu.cn/simple"
     ports:
       - "8000"
     depends_on:

@@ -19,7 +19,7 @@ class User(AbstractUser):
         '权限角色', 
         max_length=20, 
         choices=ROLE_CHOICES, 
-        default='teacher'
+        default='owner'
     )
     
     # 关联的幼儿园（教师和园长需要关联）

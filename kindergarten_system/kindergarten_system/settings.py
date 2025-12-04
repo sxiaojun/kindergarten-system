@@ -27,7 +27,7 @@ SECRET_KEY = 'django-insecure-_=_+vw-*#$7))pa45uje^^kd8*76n9&7p!4aox_v#sea$8ocdz
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['localhost', '127.0.0.1']
+ALLOWED_HOSTS = ['localhost', '127.0.0.1', '116.205.174.147']
 
 
 # Application definition
@@ -92,24 +92,32 @@ WSGI_APPLICATION = 'kindergarten_system.wsgi.application'
 #         'NAME': BASE_DIR / 'db.sqlite3',
 #     }
 # }
+# DATABASES = {
+#     'default': {
+#         'ENGINE': 'django.db.backends.mysql',
+#         'NAME': os.environ.get('DATABASE_NAME', 'kindergarten_db'),
+#         'USER': os.environ.get('DATABASE_USER', 'kindergarten_user'),
+#         'PASSWORD': os.environ.get('DATABASE_PASSWORD', 'kindergarten_password'),
+#         'HOST': os.environ.get('DATABASE_HOST', 'localhost'),
+#         'PORT': os.environ.get('DATABASE_PORT', '3306'),
+#         'OPTIONS': {
+#             'charset': 'utf8mb4',
+#         }
+#     }
+# }
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',
-        'NAME': os.environ.get('DATABASE_NAME', 'kindergarten_db'),
-        'USER': os.environ.get('DATABASE_USER', 'kindergarten_user'),
-        'PASSWORD': os.environ.get('DATABASE_PASSWORD', 'kindergarten_password'),
-        'HOST': os.environ.get('DATABASE_HOST', 'localhost'),
-        'PORT': os.environ.get('DATABASE_PORT', '3306'),
+        'NAME': 'kindergarten_db',
+        'USER': 'kindergarten_user',
+        'PASSWORD': 'kindergarten_password',
+        'HOST': '116.205.174.147',
+        'PORT': '3306',
         'OPTIONS': {
             'charset': 'utf8mb4',
-        },
-        'TEST': {
-            'CHARSET': 'utf8mb4',
-            'COLLATION': 'utf8mb4_unicode_ci',
-        },
+        }
     }
 }
-
 
 # Password validation
 # https://docs.djangoproject.com/en/4.2/ref/settings/#auth-password-validators
@@ -145,11 +153,19 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/4.2/howto/static-files/
 
-STATIC_URL = 'static/'
+# STATIC_URL = 'static/'
+
+# # 媒体文件配置
+# MEDIA_URL = '/media/'
+# MEDIA_ROOT = BASE_DIR / 'media'
+
+# 静态文件配置
+STATIC_URL = '/static/'
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
 # 媒体文件配置
 MEDIA_URL = '/media/'
-MEDIA_ROOT = BASE_DIR / 'media'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 # CORS配置
 CORS_ALLOWED_ORIGINS = [
