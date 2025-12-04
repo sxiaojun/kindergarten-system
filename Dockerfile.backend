@@ -30,6 +30,10 @@ RUN pip install --no-cache-dir -r requirements.txt \
 # 复制项目代码
 COPY ./kindergarten_system /app
 
+# 创建媒体文件目录并设置权限
+RUN mkdir -p /app/media/child_avatars
+RUN chmod -R 755 /app/media
+
 # 暴露端口
 EXPOSE 8000
 
