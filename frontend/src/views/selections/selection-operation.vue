@@ -215,7 +215,9 @@ const getRandomFontSize = () => {
 
 // 计算未分配幼儿
 const unassignedChildren = computed(() => {
-  const assignedIds = assignedChildren.value.map(item => item.child_id)
+  const assignedIds = assignedChildren.value
+    .filter(item => item && item.child_id)  // 添加 item 存在性检查
+    .map(item => item.child_id)
   return allChildren.value.filter(child => !assignedIds.includes(child.id))
 })
 
@@ -316,9 +318,9 @@ const handleClassChange = async () => {
 // 根据选区ID获取幼儿列表
 const getChildrenByArea = (areaId) => {
   const assignedChildIds = assignedChildren.value
-    .filter(record => record.selection_area_id === areaId)
+    .filter(record => record && record.selection_area_id === areaId)  // 添加 record 存在性检查
     .map(record => record.child_id)
-  
+
   return allChildren.value.filter(child => assignedChildIds.includes(child.id))
 }
 
@@ -429,7 +431,15 @@ const handleDropToArea = async (areaId) => {
   
   const child = dragData.value.data
   const area = selectionAreas.value.find(a => a.id === areaId)
-  
+
+  // 检查area是否存在
+  if (!area) {
+    ElMessage.error('选区不存在')
+    dragOverTarget.value = null
+    dragData.value = null
+    return
+  }
+
   // 检查选区是否已满
   const currentCount = getChildrenByArea(areaId).length
   if (currentCount >= area.capacity) {
@@ -438,7 +448,7 @@ const handleDropToArea = async (areaId) => {
     dragData.value = null
     return
   }
-  
+
   // 添加视觉反馈
   const targetArea = document.querySelector(`[data-area-id="${areaId}"]`)
   if (targetArea) {
@@ -447,9 +457,9 @@ const handleDropToArea = async (areaId) => {
       targetArea.classList.remove('drop-success')
     }, 1000)
   }
-  
+
   // 检查幼儿是否已分配到其他选区
-  const existingRecord = assignedChildren.value.find(r => r.child_id === child.id)
+  const existingRecord = assignedChildren.value.find(r => r && r.child_id === child.id)
   if (existingRecord) {
     // 更新选区
     try {
@@ -457,7 +467,7 @@ const handleDropToArea = async (areaId) => {
         selection_area_id: areaId
       })
       // 更新本地状态
-      const index = assignedChildren.value.findIndex(r => r.id === existingRecord.id)
+      const index = assignedChildren.value.findIndex(r => r && r.id === existingRecord.id)
       if (index !== -1) {
         assignedChildren.value[index].selection_area_id = areaId
       }
