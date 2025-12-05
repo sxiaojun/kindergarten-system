@@ -524,16 +524,41 @@ const handleDropToSource = async () => {
 const handleDropToArea = async (areaId) => {
   if (!dragData.value || dragData.value.type !== 'child') return
   const child = dragData.value.data
-  // 先检查选区是否存在于当前列表中
+
+  // 检查选区是否存在
   const area = selectionAreas.value.find(a => a.id === areaId)
   if (!area) {
-    // 如果选区不存在于当前列表中，直接报错
+    // 重新获取选区列表，确保数据是最新的
+    try {
+      const today = new Date().toISOString().split('T')[0]
+      const areasRes = await getSelectionAreas({ class_id: selectedClassId.value, page_size: 100 })
+      const freshAreas = areasRes.results?.items || areasRes.results || areasRes.data?.results || areasRes.items || areasRes || []
+
+      // 再次检查选区是否存在
+      const freshArea = freshAreas.find(a => a.id === areaId)
+      if (!freshArea) {
+        ElMessage.error('选区不存在')
+        return
+      }
+
+      // 更新选区列表
+      selectionAreas.value = freshAreas
+    } catch (error) {
+      console.error('刷新选区列表失败:', error)
+      ElMessage.error('选区数据加载失败')
+      return
+    }
+  }
+
+  // 重新获取当前选区
+  const currentArea = selectionAreas.value.find(a => a.id === areaId)
+  if (!currentArea) {
     ElMessage.error('选区不存在')
     return
   }
 
   const currentCount = getChildrenByArea(areaId).length
-  if (currentCount >= area.capacity) {
+  if (currentCount >= currentArea.capacity) {
     ElMessage.warning('该选区人数已满')
     return
   }
@@ -550,11 +575,11 @@ const handleDropToArea = async (areaId) => {
       await updateSelectionRecord(existingRecord.id, { selection_area_id: areaId })
       const index = assignedChildren.value.findIndex(r => r && r.id === existingRecord.id)
       if (index !== -1) assignedChildren.value[index].selection_area_id = areaId
-      ElMessage.success(`${child.name}已重新分配到${area.name}`)
+      ElMessage.success(`${child.name}已重新分配到${currentArea.name}`)
     } else {
       const res = await createSelectionRecord({ child_id: child.id, selection_area_id: areaId })
       assignedChildren.value.push(res.data)
-      ElMessage.success(`${child.name}已分配到${area.name}`)
+      ElMessage.success(`${child.name}已分配到${currentArea.name}`)
     }
   } catch (error) {
     console.error('分配失败:', error)
@@ -636,7 +661,10 @@ onMounted(() => {
 
   // 全局样式确保下拉框层级
   const style = document.createElement('style')
-  style.innerHTML = `.el-select-dropdown{z-index:9999!important;}`
+  style.innerHTML = `
+    .el-select-dropdown{z-index:9999!important;}
+    .el-message{z-index:999999!important;}
+  `
   document.head.appendChild(style)
 })
 
