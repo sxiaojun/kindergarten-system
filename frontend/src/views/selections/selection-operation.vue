@@ -513,10 +513,10 @@ const handleDropToSource = async () => {
     try {
       await deleteSelectionRecord(record.id)
       assignedChildren.value = assignedChildren.value.filter(r => r.id !== record.id)
-      ElMessage.success(`${child.name}已取消分配`)
+      showFullscreenMessage('success', `${child.name}已取消分配`)
     } catch (error) {
       console.error('取消分配失败:', error)
-      ElMessage.error('取消分配失败')
+      showFullscreenMessage('error', '取消分配失败')
     }
   }
 }
@@ -537,7 +537,7 @@ const handleDropToArea = async (areaId) => {
       // 再次检查选区是否存在
       const freshArea = freshAreas.find(a => a.id === areaId)
       if (!freshArea) {
-        ElMessage.error('选区不存在')
+        showFullscreenMessage('error', '选区不存在')
         return
       }
 
@@ -545,7 +545,7 @@ const handleDropToArea = async (areaId) => {
       selectionAreas.value = freshAreas
     } catch (error) {
       console.error('刷新选区列表失败:', error)
-      ElMessage.error('选区数据加载失败')
+      showFullscreenMessage('error', '选区数据加载失败')
       return
     }
   }
@@ -553,13 +553,13 @@ const handleDropToArea = async (areaId) => {
   // 重新获取当前选区
   const currentArea = selectionAreas.value.find(a => a.id === areaId)
   if (!currentArea) {
-    ElMessage.error('选区不存在')
+    showFullscreenMessage('error', '选区不存在')
     return
   }
 
   const currentCount = getChildrenByArea(areaId).length
   if (currentCount >= currentArea.capacity) {
-    ElMessage.warning('该选区人数已满')
+    showFullscreenMessage('warning', '该选区人数已满')
     return
   }
 
@@ -575,15 +575,15 @@ const handleDropToArea = async (areaId) => {
       await updateSelectionRecord(existingRecord.id, { selection_area_id: areaId })
       const index = assignedChildren.value.findIndex(r => r && r.id === existingRecord.id)
       if (index !== -1) assignedChildren.value[index].selection_area_id = areaId
-      ElMessage.success(`${child.name}已重新分配到${currentArea.name}`)
+      showFullscreenMessage('success', `${child.name}已重新分配到${currentArea.name}`)
     } else {
       const res = await createSelectionRecord({ child_id: child.id, selection_area_id: areaId })
       assignedChildren.value.push(res.data)
-      ElMessage.success(`${child.name}已分配到${currentArea.name}`)
+      showFullscreenMessage('success', `${child.name}已分配到${currentArea.name}`)
     }
   } catch (error) {
     console.error('分配失败:', error)
-    ElMessage.error('分配失败')
+    showFullscreenMessage('error', '分配失败')
   }
 }
 
@@ -620,6 +620,7 @@ const handleFullscreenChange = () => {
     document.msFullscreenElement
   )
   selectKey.value += 1
+  
   nextTick(() => {
     if (selectedClassId.value) handleClassChange()
   })
@@ -647,6 +648,61 @@ const handleScreenResize = debounce(() => {
   selectKey.value += 1
 }, 100)
 
+// 在全屏模式下显示消息
+const showFullscreenMessage = (type, message) => {
+  if (isFullscreen.value) {
+    // 在全屏模式下，将消息显示在全屏容器内
+    const container = containerRef.value
+    if (container) {
+      // 创建消息元素
+      const messageEl = document.createElement('div')
+      messageEl.className = `el-message el-message--${type}`
+      messageEl.style.cssText = `
+        position: fixed;
+        top: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 1000000;
+        padding: 15px 20px;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        background: ${type === 'success' ? '#f0f9ff' : type === 'error' ? '#fef0f0' : '#fdf6ec'};
+        color: ${type === 'success' ? '#67c23a' : type === 'error' ? '#f56c6c' : '#e6a23c'};
+        display: flex;
+        align-items: center;
+        font-size: 14px;
+      `
+      
+      // 添加图标
+      const iconEl = document.createElement('i')
+      iconEl.className = `el-message__icon el-icon-${type === 'success' ? 'success' : type === 'error' ? 'error' : 'warning'}`
+      iconEl.style.marginRight = '10px'
+      messageEl.appendChild(iconEl)
+      
+      // 添加文本
+      const textEl = document.createElement('p')
+      textEl.textContent = message
+      textEl.style.margin = '0'
+      messageEl.appendChild(textEl)
+      
+      // 添加到全屏容器
+      container.appendChild(messageEl)
+      
+      // 3秒后自动移除
+      setTimeout(() => {
+        if (messageEl.parentNode) {
+          messageEl.parentNode.removeChild(messageEl)
+        }
+      }, 3000)
+      
+      return
+    }
+  }
+  
+  // 非全屏模式下使用默认的 ElMessage
+  ElMessage[type](message)
+}
+
 // ========== 生命周期 ==========
 
 onMounted(() => {
@@ -659,11 +715,12 @@ onMounted(() => {
   window.addEventListener('resize', handleScreenResize)
   getClassList()
 
-  // 全局样式确保下拉框层级
+  // 全局样式确保下拉框层级和消息提示在全屏模式下可见
   const style = document.createElement('style')
   style.innerHTML = `
     .el-select-dropdown{z-index:9999!important;}
     .el-message{z-index:999999!important;}
+    .el-message-box{z-index:999999!important;}
   `
   document.head.appendChild(style)
 })
