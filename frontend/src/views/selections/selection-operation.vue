@@ -186,6 +186,7 @@ const touchDragging = ref(false)
 const touchDragPreview = ref(null)
 const currentTouchTarget = ref(null)
 const dragTrail = ref([])
+const touchMoveDebounceTimer = ref(null) // 触摸移动防抖定时器
 
 // 获取随机起始位置（用于黑洞文字动画）
 const getRandomStartPosition = (axis) => {
@@ -384,7 +385,17 @@ const moveDragPreview = (x, y) => {
   createDragTrail(x, y)
 }
 
-const handleTouchMove = (event) => {
+// 防抖函数 - 用于触摸移动事件
+const debounce = (fn, delay) => {
+  return (...args) => {
+    if (touchMoveDebounceTimer.value) {
+      clearTimeout(touchMoveDebounceTimer.value)
+    }
+    touchMoveDebounceTimer.value = setTimeout(() => fn.apply(this, args), delay)
+  }
+}
+
+const handleTouchMove = debounce((event) => {
   if (!touchDragging.value || !event.touches[0]) return
   event.preventDefault()
 
@@ -392,11 +403,12 @@ const handleTouchMove = (event) => {
   const y = event.touches[0].clientY
   moveDragPreview(x, y)
 
-  // 先尝试 elementsFromPoint（快速路径）
-  const elements = document.elementsFromPoint(x, y)
+  // 优化选区检测逻辑
   let targetAreaId = null
   let inSource = false
 
+  // 使用更精确的检测方法
+  const elements = document.elementsFromPoint(x, y)
   for (const el of elements) {
     if (el.classList.contains('unassigned-area')) {
       inSource = true
@@ -430,9 +442,14 @@ const handleTouchMove = (event) => {
     dragOverSource.value = false
     dragOverTarget.value = null
   }
-}
+}, 16) // 16ms 防抖时间，约60fps
 
 const cleanupTouchDrag = () => {
+  if (touchMoveDebounceTimer.value) {
+    clearTimeout(touchMoveDebounceTimer.value)
+    touchMoveDebounceTimer.value = null
+  }
+
   if (touchDragPreview.value) {
     document.body.removeChild(touchDragPreview.value)
     touchDragPreview.value = null
@@ -525,14 +542,14 @@ const handleDropToArea = async (areaId) => {
   if (!dragData.value || dragData.value.type !== 'child') return
   const child = dragData.value.data
 
-  // 获取当前选区
+  // 优化选区检测逻辑，避免重复查询
   let currentArea = selectionAreas.value.find(a => a.id === areaId)
-  
+
   // 如果选区不存在，重新获取选区列表，确保数据是最新的
   if (!currentArea) {
     try {
       const today = new Date().toISOString().split('T')[0]
-      const areasRes = await getSelectionAreas({ class_id: selectedClassId.value, page_size: 100 })
+      const areasRes = await getSelectionAreas({class_id: selectedClassId.value, page_size: 100})
       const freshAreas = areasRes.results?.items || areasRes.results || areasRes.data?.results || areasRes.items || areasRes || []
 
       // 再次检查选区是否存在
@@ -566,12 +583,12 @@ const handleDropToArea = async (areaId) => {
   const existingRecord = assignedChildren.value.find(r => r && r.child_id === child.id)
   try {
     if (existingRecord) {
-      await updateSelectionRecord(existingRecord.id, { selection_area_id: areaId })
+      await updateSelectionRecord(existingRecord.id, {selection_area_id: areaId})
       const index = assignedChildren.value.findIndex(r => r && r.id === existingRecord.id)
       if (index !== -1) assignedChildren.value[index].selection_area_id = areaId
       showFullscreenMessage('success', `${child.name}已重新分配到${currentArea.name}`)
     } else {
-      const res = await createSelectionRecord({ child_id: child.id, selection_area_id: areaId })
+      const res = await createSelectionRecord({child_id: child.id, selection_area_id: areaId})
       assignedChildren.value.push(res.data)
       showFullscreenMessage('success', `${child.name}已分配到${currentArea.name}`)
     }
@@ -608,20 +625,20 @@ const toggleFullscreen = () => {
 
 const handleFullscreenChange = () => {
   isFullscreen.value = !!(
-    document.fullscreenElement ||
-    document.mozFullScreenElement ||
-    document.webkitFullscreenElement ||
-    document.msFullscreenElement
+      document.fullscreenElement ||
+      document.mozFullScreenElement ||
+      document.webkitExitFullscreenElement ||
+      document.msFullscreenElement
   )
   selectKey.value += 1
-  
+
   nextTick(() => {
     if (selectedClassId.value) handleClassChange()
   })
 }
 
 // 防抖函数
-const debounce = (fn, delay) => {
+const debounceResize = (fn, delay) => {
   let timer
   return (...args) => {
     clearTimeout(timer)
@@ -630,14 +647,14 @@ const debounce = (fn, delay) => {
 }
 
 // 窗口大小变化时更新选区宽度
-const handleResize = debounce(() => {
+const handleResize = debounceResize(() => {
   if (selectedClassId.value) {
     updateSelectionAreaWidth()
   }
 }, 300)
 
 // 监听屏幕大小变化，更新头像大小
-const handleScreenResize = debounce(() => {
+const handleScreenResize = debounceResize(() => {
   // 触发响应式更新
   selectKey.value += 1
 }, 100)
@@ -666,33 +683,33 @@ const showFullscreenMessage = (type, message) => {
         align-items: center;
         font-size: 14px;
       `
-      
+
       // 添加图标
       const iconEl = document.createElement('i')
       iconEl.className = `el-message__icon el-icon-${type === 'success' ? 'success' : type === 'error' ? 'error' : 'warning'}`
       iconEl.style.marginRight = '10px'
       messageEl.appendChild(iconEl)
-      
+
       // 添加文本
       const textEl = document.createElement('p')
       textEl.textContent = message
       textEl.style.margin = '0'
       messageEl.appendChild(textEl)
-      
+
       // 添加到全屏容器
       container.appendChild(messageEl)
-      
+
       // 3秒后自动移除
       setTimeout(() => {
         if (messageEl.parentNode) {
           messageEl.parentNode.removeChild(messageEl)
         }
       }, 3000)
-      
+
       return
     }
   }
-  
+
   // 非全屏模式下使用默认的 ElMessage
   ElMessage[type](message)
 }
@@ -720,6 +737,9 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  if (touchMoveDebounceTimer.value) {
+    clearTimeout(touchMoveDebounceTimer.value)
+  }
   document.removeEventListener('fullscreenchange', handleFullscreenChange)
   document.removeEventListener('mozfullscreenchange', handleFullscreenChange)
   document.removeEventListener('webkitfullscreenchange', handleFullscreenChange)
@@ -904,56 +924,305 @@ onUnmounted(() => {
 }
 
 /* 为每个粒子设置不同的初始位置和动画延迟 */
-.floating-particle:nth-child(1) { top: 10%; left: 10%; animation-delay: 0s; }
-.floating-particle:nth-child(2) { top: 20%; left: 80%; animation-delay: 1s; }
-.floating-particle:nth-child(3) { top: 30%; left: 30%; animation-delay: 2s; }
-.floating-particle:nth-child(4) { top: 40%; left: 70%; animation-delay: 3s; }
-.floating-particle:nth-child(5) { top: 50%; left: 20%; animation-delay: 4s; }
-.floating-particle:nth-child(6) { top: 60%; left: 60%; animation-delay: 5s; }
-.floating-particle:nth-child(7) { top: 70%; left: 40%; animation-delay: 6s; }
-.floating-particle:nth-child(8) { top: 80%; left: 80%; animation-delay: 7s; }
-.floating-particle:nth-child(9) { top: 15%; left: 50%; animation-delay: 0.5s; }
-.floating-particle:nth-child(10) { top: 25%; left: 25%; animation-delay: 1.5s; }
-.floating-particle:nth-child(11) { top: 35%; left: 65%; animation-delay: 2.5s; }
-.floating-particle:nth-child(12) { top: 45%; left: 15%; animation-delay: 3.5s; }
-.floating-particle:nth-child(13) { top: 55%; left: 55%; animation-delay: 4.5s; }
-.floating-particle:nth-child(14) { top: 65%; left: 35%; animation-delay: 5.5s; }
-.floating-particle:nth-child(15) { top: 75%; left: 75%; animation-delay: 6.5s; }
-.floating-particle:nth-child(16) { top: 85%; left: 45%; animation-delay: 7.5s; }
-.floating-particle:nth-child(17) { top: 12%; left: 90%; animation-delay: 0.8s; }
-.floating-particle:nth-child(18) { top: 22%; left: 10%; animation-delay: 1.8s; }
-.floating-particle:nth-child(19) { top: 32%; left: 80%; animation-delay: 2.8s; }
-.floating-particle:nth-child(20) { top: 42%; left: 20%; animation-delay: 3.8s; }
-.floating-particle:nth-child(21) { top: 52%; left: 60%; animation-delay: 4.8s; }
-.floating-particle:nth-child(22) { top: 62%; left: 30%; animation-delay: 5.8s; }
-.floating-particle:nth-child(23) { top: 72%; left: 70%; animation-delay: 6.8s; }
-.floating-particle:nth-child(24) { top: 82%; left: 40%; animation-delay: 7.8s; }
-.floating-particle:nth-child(25) { top: 18%; left: 15%; animation-delay: 0.3s; }
-.floating-particle:nth-child(26) { top: 28%; left: 85%; animation-delay: 1.3s; }
-.floating-particle:nth-child(27) { top: 38%; left: 35%; animation-delay: 2.3s; }
-.floating-particle:nth-child(28) { top: 48%; left: 65%; animation-delay: 3.3s; }
-.floating-particle:nth-child(29) { top: 58%; left: 25%; animation-delay: 4.3s; }
-.floating-particle:nth-child(30) { top: 68%; left: 75%; animation-delay: 5.3s; }
-.floating-particle:nth-child(31) { top: 5%; left: 40%; animation-delay: 0.2s; }
-.floating-particle:nth-child(32) { top: 15%; left: 70%; animation-delay: 1.2s; }
-.floating-particle:nth-child(33) { top: 25%; left: 10%; animation-delay: 2.2s; }
-.floating-particle:nth-child(34) { top: 35%; left: 80%; animation-delay: 3.2s; }
-.floating-particle:nth-child(35) { top: 45%; left: 30%; animation-delay: 4.2s; }
-.floating-particle:nth-child(36) { top: 55%; left: 60%; animation-delay: 5.2s; }
-.floating-particle:nth-child(37) { top: 65%; left: 20%; animation-delay: 6.2s; }
-.floating-particle:nth-child(38) { top: 75%; left: 90%; animation-delay: 7.2s; }
-.floating-particle:nth-child(39) { top: 85%; left: 50%; animation-delay: 0.7s; }
-.floating-particle:nth-child(40) { top: 95%; left: 25%; animation-delay: 1.7s; }
-.floating-particle:nth-child(41) { top: 8%; left: 65%; animation-delay: 2.7s; }
-.floating-particle:nth-child(42) { top: 18%; left: 15%; animation-delay: 3.7s; }
-.floating-particle:nth-child(43) { top: 28%; left: 75%; animation-delay: 4.7s; }
-.floating-particle:nth-child(44) { top: 38%; left: 35%; animation-delay: 5.7s; }
-.floating-particle:nth-child(45) { top: 48%; left: 85%; animation-delay: 6.7s; }
-.floating-particle:nth-child(46) { top: 58%; left: 45%; animation-delay: 7.7s; }
-.floating-particle:nth-child(47) { top: 68%; left: 5%; animation-delay: 0.9s; }
-.floating-particle:nth-child(48) { top: 78%; left: 55%; animation-delay: 1.9s; }
-.floating-particle:nth-child(49) { top: 88%; left: 95%; animation-delay: 2.9s; }
-.floating-particle:nth-child(50) { top: 3%; left: 30%; animation-delay: 3.9s; }
+.floating-particle:nth-child(1) {
+  top: 10%;
+  left: 10%;
+  animation-delay: 0s;
+}
+
+.floating-particle:nth-child(2) {
+  top: 20%;
+  left: 80%;
+  animation-delay: 1s;
+}
+
+.floating-particle:nth-child(3) {
+  top: 30%;
+  left: 30%;
+  animation-delay: 2s;
+}
+
+.floating-particle:nth-child(4) {
+  top: 40%;
+  left: 70%;
+  animation-delay: 3s;
+}
+
+.floating-particle:nth-child(5) {
+  top: 50%;
+  left: 20%;
+  animation-delay: 4s;
+}
+
+.floating-particle:nth-child(6) {
+  top: 60%;
+  left: 60%;
+  animation-delay: 5s;
+}
+
+.floating-particle:nth-child(7) {
+  top: 70%;
+  left: 40%;
+  animation-delay: 6s;
+}
+
+.floating-particle:nth-child(8) {
+  top: 80%;
+  left: 80%;
+  animation-delay: 7s;
+}
+
+.floating-particle:nth-child(9) {
+  top: 15%;
+  left: 50%;
+  animation-delay: 0.5s;
+}
+
+.floating-particle:nth-child(10) {
+  top: 25%;
+  left: 25%;
+  animation-delay: 1.5s;
+}
+
+.floating-particle:nth-child(11) {
+  top: 35%;
+  left: 65%;
+  animation-delay: 2.5s;
+}
+
+.floating-particle:nth-child(12) {
+  top: 45%;
+  left: 15%;
+  animation-delay: 3.5s;
+}
+
+.floating-particle:nth-child(13) {
+  top: 55%;
+  left: 55%;
+  animation-delay: 4.5s;
+}
+
+.floating-particle:nth-child(14) {
+  top: 65%;
+  left: 35%;
+  animation-delay: 5.5s;
+}
+
+.floating-particle:nth-child(15) {
+  top: 75%;
+  left: 75%;
+  animation-delay: 6.5s;
+}
+
+.floating-particle:nth-child(16) {
+  top: 85%;
+  left: 45%;
+  animation-delay: 7.5s;
+}
+
+.floating-particle:nth-child(17) {
+  top: 12%;
+  left: 90%;
+  animation-delay: 0.8s;
+}
+
+.floating-particle:nth-child(18) {
+  top: 22%;
+  left: 10%;
+  animation-delay: 1.8s;
+}
+
+.floating-particle:nth-child(19) {
+  top: 32%;
+  left: 80%;
+  animation-delay: 2.8s;
+}
+
+.floating-particle:nth-child(20) {
+  top: 42%;
+  left: 20%;
+  animation-delay: 3.8s;
+}
+
+.floating-particle:nth-child(21) {
+  top: 52%;
+  left: 60%;
+  animation-delay: 4.8s;
+}
+
+.floating-particle:nth-child(22) {
+  top: 62%;
+  left: 30%;
+  animation-delay: 5.8s;
+}
+
+.floating-particle:nth-child(23) {
+  top: 72%;
+  left: 70%;
+  animation-delay: 6.8s;
+}
+
+.floating-particle:nth-child(24) {
+  top: 82%;
+  left: 40%;
+  animation-delay: 7.8s;
+}
+
+.floating-particle:nth-child(25) {
+  top: 18%;
+  left: 15%;
+  animation-delay: 0.3s;
+}
+
+.floating-particle:nth-child(26) {
+  top: 28%;
+  left: 85%;
+  animation-delay: 1.3s;
+}
+
+.floating-particle:nth-child(27) {
+  top: 38%;
+  left: 35%;
+  animation-delay: 2.3s;
+}
+
+.floating-particle:nth-child(28) {
+  top: 48%;
+  left: 65%;
+  animation-delay: 3.3s;
+}
+
+.floating-particle:nth-child(29) {
+  top: 58%;
+  left: 25%;
+  animation-delay: 4.3s;
+}
+
+.floating-particle:nth-child(30) {
+  top: 68%;
+  left: 75%;
+  animation-delay: 5.3s;
+}
+
+.floating-particle:nth-child(31) {
+  top: 5%;
+  left: 40%;
+  animation-delay: 0.2s;
+}
+
+.floating-particle:nth-child(32) {
+  top: 15%;
+  left: 70%;
+  animation-delay: 1.2s;
+}
+
+.floating-particle:nth-child(33) {
+  top: 25%;
+  left: 10%;
+  animation-delay: 2.2s;
+}
+
+.floating-particle:nth-child(34) {
+  top: 35%;
+  left: 80%;
+  animation-delay: 3.3s;
+}
+
+.floating-particle:nth-child(35) {
+  top: 45%;
+  left: 30%;
+  animation-delay: 4.2s;
+}
+
+.floating-particle:nth-child(36) {
+  top: 55%;
+  left: 60%;
+  animation-delay: 5.2s;
+}
+
+.floating-particle:nth-child(37) {
+  top: 65%;
+  left: 20%;
+  animation-delay: 6.2s;
+}
+
+.floating-particle:nth-child(38) {
+  top: 75%;
+  left: 90%;
+  animation-delay: 7.2s;
+}
+
+.floating-particle:nth-child(39) {
+  top: 85%;
+  left: 50%;
+  animation-delay: 0.7s;
+}
+
+.floating-particle:nth-child(40) {
+  top: 95%;
+  left: 25%;
+  animation-delay: 1.7s;
+}
+
+.floating-particle:nth-child(41) {
+  top: 8%;
+  left: 65%;
+  animation-delay: 2.7s;
+}
+
+.floating-particle:nth-child(42) {
+  top: 18%;
+  left: 15%;
+  animation-delay: 3.7s;
+}
+
+.floating-particle:nth-child(43) {
+  top: 28%;
+  left: 75%;
+  animation-delay: 4.7s;
+}
+
+.floating-particle:nth-child(44) {
+  top: 38%;
+  left: 35%;
+  animation-delay: 5.7s;
+}
+
+.floating-particle:nth-child(45) {
+  top: 48%;
+  left: 85%;
+  animation-delay: 6.7s;
+}
+
+.floating-particle:nth-child(46) {
+  top: 58%;
+  left: 45%;
+  animation-delay: 7.7s;
+}
+
+.floating-particle:nth-child(47) {
+  top: 68%;
+  left: 5%;
+  animation-delay: 0.9s;
+}
+
+.floating-particle:nth-child(48) {
+  top: 78%;
+  left: 55%;
+  animation-delay: 1.9s;
+}
+
+.floating-particle:nth-child(49) {
+  top: 88%;
+  left: 95%;
+  animation-delay: 2.9s;
+}
+
+.floating-particle:nth-child(50) {
+  top: 3%;
+  left: 30%;
+  animation-delay: 3.9s;
+}
 
 /* 发光球体 */
 .glowing-orb {
@@ -1058,11 +1327,11 @@ onUnmounted(() => {
   position: absolute;
   border-radius: 50%;
   background: radial-gradient(
-    ellipse at center,
-    rgba(120, 100, 255, 0.3) 0%,
-    rgba(80, 60, 200, 0.2) 40%,
-    rgba(40, 30, 100, 0.1) 70%,
-    transparent 100%
+      ellipse at center,
+      rgba(120, 100, 255, 0.3) 0%,
+      rgba(80, 60, 200, 0.2) 40%,
+      rgba(40, 30, 100, 0.1) 70%,
+      transparent 100%
   );
   filter: blur(20px);
   animation: nebulaFloat 25s infinite linear;
@@ -1083,11 +1352,11 @@ onUnmounted(() => {
   height: 200px;
   animation-delay: 5s;
   background: radial-gradient(
-    ellipse at center,
-    rgba(255, 100, 150, 0.3) 0%,
-    rgba(200, 60, 100, 0.2) 40%,
-    rgba(100, 30, 50, 0.1) 70%,
-    transparent 100%
+      ellipse at center,
+      rgba(255, 100, 150, 0.3) 0%,
+      rgba(200, 60, 100, 0.2) 40%,
+      rgba(100, 30, 50, 0.1) 70%,
+      transparent 100%
   );
 }
 
@@ -1340,10 +1609,9 @@ onUnmounted(() => {
   height: 60px;
   background: #000;
   border-radius: 50%;
-  box-shadow:
-    0 0 40px #000,
-    0 0 80px #000,
-    0 0 120px #000;
+  box-shadow: 0 0 40px #000,
+  0 0 80px #000,
+  0 0 120px #000;
   z-index: 10;
   animation: blackHolePulse 3s infinite alternate;
 }
@@ -1384,12 +1652,12 @@ onUnmounted(() => {
   height: 200px;
   border-radius: 50%;
   background: conic-gradient(
-    from 0deg,
-    rgba(255, 255, 255, 0.1),
-    rgba(255, 255, 255, 0.2),
-    rgba(255, 255, 255, 0.3),
-    rgba(255, 255, 255, 0.2),
-    rgba(255, 255, 255, 0.1)
+      from 0deg,
+      rgba(255, 255, 255, 0.1),
+      rgba(255, 255, 255, 0.2),
+      rgba(255, 255, 255, 0.3),
+      rgba(255, 255, 255, 0.2),
+      rgba(255, 255, 255, 0.1)
   );
   animation: rotateDisk 20s linear infinite;
   opacity: 0.5;
@@ -1433,18 +1701,53 @@ onUnmounted(() => {
 }
 
 /* 为每个粒子设置不同的轨道 */
-.black-hole-particle:nth-child(1) { animation-delay: 0s; }
-.black-hole-particle:nth-child(2) { animation-delay: 0.4s; }
-.black-hole-particle:nth-child(3) { animation-delay: 0.8s; }
-.black-hole-particle:nth-child(4) { animation-delay: 1.2s; }
-.black-hole-particle:nth-child(5) { animation-delay: 1.6s; }
-.black-hole-particle:nth-child(6) { animation-delay: 2s; }
-.black-hole-particle:nth-child(7) { animation-delay: 2.4s; }
-.black-hole-particle:nth-child(8) { animation-delay: 2.8s; }
-.black-hole-particle:nth-child(9) { animation-delay: 3.2s; }
-.black-hole-particle:nth-child(10) { animation-delay: 3.6s; }
-.black-hole-particle:nth-child(11) { animation-delay: 4s; }
-.black-hole-particle:nth-child(12) { animation-delay: 4.4s; }
+.black-hole-particle:nth-child(1) {
+  animation-delay: 0s;
+}
+
+.black-hole-particle:nth-child(2) {
+  animation-delay: 0.4s;
+}
+
+.black-hole-particle:nth-child(3) {
+  animation-delay: 0.8s;
+}
+
+.black-hole-particle:nth-child(4) {
+  animation-delay: 1.2s;
+}
+
+.black-hole-particle:nth-child(5) {
+  animation-delay: 1.6s;
+}
+
+.black-hole-particle:nth-child(6) {
+  animation-delay: 2s;
+}
+
+.black-hole-particle:nth-child(7) {
+  animation-delay: 2.4s;
+}
+
+.black-hole-particle:nth-child(8) {
+  animation-delay: 2.8s;
+}
+
+.black-hole-particle:nth-child(9) {
+  animation-delay: 3.2s;
+}
+
+.black-hole-particle:nth-child(10) {
+  animation-delay: 3.6s;
+}
+
+.black-hole-particle:nth-child(11) {
+  animation-delay: 4s;
+}
+
+.black-hole-particle:nth-child(12) {
+  animation-delay: 4.4s;
+}
 
 /* 吸入的选区名称 */
 .area-name-infalling {
@@ -1640,6 +1943,7 @@ onUnmounted(() => {
   background-color: #e6f7ff !important;
   font-weight: bold;
 }
+
 .el-select-dropdown {
   z-index: 9999 !important;
   max-height: 300px !important;
@@ -1903,6 +2207,7 @@ onUnmounted(() => {
     width: 32px !important;
     height: 32px !important;
   }
+
   .child-name {
     font-size: 12px;
   }
@@ -1913,6 +2218,7 @@ onUnmounted(() => {
     width: 40px !important;
     height: 40px !important;
   }
+
   .child-name {
     font-size: 14px;
   }
@@ -1923,6 +2229,7 @@ onUnmounted(() => {
     width: 44px !important;
     height: 44px !important;
   }
+
   .child-name {
     font-size: 16px;
   }
@@ -1933,9 +2240,9 @@ onUnmounted(() => {
     width: 48px !important;
     height: 48px !important;
   }
+
   .child-name {
     font-size: 18px;
   }
 }
-
 </style>
