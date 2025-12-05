@@ -525,18 +525,19 @@ const handleDropToArea = async (areaId) => {
   if (!dragData.value || dragData.value.type !== 'child') return
   const child = dragData.value.data
 
-  // 检查选区是否存在
-  const area = selectionAreas.value.find(a => a.id === areaId)
-  if (!area) {
-    // 重新获取选区列表，确保数据是最新的
+  // 获取当前选区
+  let currentArea = selectionAreas.value.find(a => a.id === areaId)
+  
+  // 如果选区不存在，重新获取选区列表，确保数据是最新的
+  if (!currentArea) {
     try {
       const today = new Date().toISOString().split('T')[0]
       const areasRes = await getSelectionAreas({ class_id: selectedClassId.value, page_size: 100 })
       const freshAreas = areasRes.results?.items || areasRes.results || areasRes.data?.results || areasRes.items || areasRes || []
 
       // 再次检查选区是否存在
-      const freshArea = freshAreas.find(a => a.id === areaId)
-      if (!freshArea) {
+      currentArea = freshAreas.find(a => a.id === areaId)
+      if (!currentArea) {
         showFullscreenMessage('error', '选区不存在')
         return
       }
@@ -548,13 +549,6 @@ const handleDropToArea = async (areaId) => {
       showFullscreenMessage('error', '选区数据加载失败')
       return
     }
-  }
-
-  // 重新获取当前选区
-  const currentArea = selectionAreas.value.find(a => a.id === areaId)
-  if (!currentArea) {
-    showFullscreenMessage('error', '选区不存在')
-    return
   }
 
   const currentCount = getChildrenByArea(areaId).length
