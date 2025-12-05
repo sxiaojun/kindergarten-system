@@ -68,7 +68,7 @@
             @drop.prevent="handleDropToSource"
             @touchstart="handleTouchStart($event, 'source')"
             @touchmove="handleTouchMove"
-            @touchend="handleTouchEnd($event, 'source')"
+            @touchend="handleTouchEnd"
             @touchcancel="handleTouchCancel"
           >
             <div class="children-list">
@@ -81,7 +81,7 @@
                 @dragend="handleDragEnd"
                 @touchstart="handleTouchStart($event, 'child', child)"
                 @touchmove="handleTouchMove"
-                @touchend="handleTouchEnd($event, 'source')"
+                @touchend="handleTouchEnd"
                 @touchcancel="handleTouchCancel"
               >
                 <div class="child-avatar">
@@ -117,7 +117,7 @@
               @drop.prevent="handleDropToArea(area.id)"
               @touchstart="handleTouchStart($event, 'area', area)"
               @touchmove="handleTouchMove"
-              @touchend="handleTouchEnd($event, 'target', area.id)"
+              @touchend="handleTouchEnd"
               @touchcancel="handleTouchCancel"
             >
               <!-- 黑洞动画效果 -->
@@ -152,8 +152,8 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
-import { ElMessage } from 'element-plus'
+import {ref, reactive, computed, onMounted, onUnmounted, nextTick, watch} from 'vue'
+import {ElMessage} from 'element-plus'
 import {
   getSelectionAreas,
   getSelectionRecords,
@@ -169,7 +169,7 @@ const loading = ref(false)
 const selectedClassId = ref('')
 const selectKey = ref(0)
 const containerRef = ref(null)
-const formModel = reactive({ selectedClassId: '' })
+const formModel = reactive({selectedClassId: ''})
 const classList = ref([])
 const selectionAreas = ref([])
 const allChildren = ref([])
@@ -184,9 +184,10 @@ const dropdownPlaceholder = ref(null)
 // Touch 拖拽状态
 const touchDragging = ref(false)
 const touchDragPreview = ref(null)
-const currentTouchTarget = ref(null)
-const dragTrail = ref([])
-const touchMoveDebounceTimer = ref(null) // 触摸移动防抖定时器
+const touchStartPos = ref({x: 0, y: 0})
+const touchCurrentPos = ref({x: 0, y: 0})
+const touchMoveTimer = ref(null)
+const lastTouchArea = ref(null)
 
 // 获取随机起始位置（用于黑洞文字动画）
 const getRandomStartPosition = (axis) => {
@@ -196,8 +197,8 @@ const getRandomStartPosition = (axis) => {
 // 计算未分配幼儿
 const unassignedChildren = computed(() => {
   const assignedIds = assignedChildren.value
-    .filter(item => item && item.child_id)
-    .map(item => item.child_id)
+      .filter(item => item && item.child_id)
+      .map(item => item.child_id)
   return allChildren.value.filter(child => !assignedIds.includes(child.id))
 })
 
@@ -218,7 +219,7 @@ const childAvatarSize = computed(() => {
 // 获取班级列表
 const getClassList = async () => {
   try {
-    const res = await classApi.getClassList({ page_size: 100 })
+    const res = await classApi.getClassList({page_size: 100})
     if (res && res.results) {
       classList.value = Array.isArray(res.results.items) ? res.results.items : res.results
     } else {
@@ -249,8 +250,8 @@ const handleClassChange = async () => {
     const today = new Date().toISOString().split('T')[0]
 
     const [areasRes, childrenRes, recordsRes] = await Promise.all([
-      getSelectionAreas({ class_id: selectedClassId.value, page_size: 100 }),
-      childApi.getChildrenList({ class_id: selectedClassId.value, page_size: 200 }),
+      getSelectionAreas({class_id: selectedClassId.value, page_size: 100}),
+      childApi.getChildrenList({class_id: selectedClassId.value, page_size: 200}),
       getSelectionRecords({
         class_id: selectedClassId.value,
         page_size: 200,
@@ -259,7 +260,6 @@ const handleClassChange = async () => {
         is_active: true
       })
     ])
-
 
     selectionAreas.value = areasRes.results?.items || areasRes.results || areasRes.data?.results || areasRes.items || areasRes || []
     allChildren.value = childrenRes.results?.items || childrenRes.results || childrenRes.data?.results || childrenRes.items || childrenRes || []
@@ -303,8 +303,8 @@ const updateSelectionAreaWidth = () => {
 // 根据选区ID获取已分配幼儿
 const getChildrenByArea = (areaId) => {
   const assignedChildIds = assignedChildren.value
-    .filter(record => record && record.selection_area_id === areaId)
-    .map(record => record.child_id)
+      .filter(record => record && record.selection_area_id === areaId)
+      .map(record => record.child_id)
   return allChildren.value.filter(child => assignedChildIds.includes(child.id))
 }
 
@@ -364,15 +364,16 @@ const handleTouchStart = (event, type, data) => {
 
   event.preventDefault()
   const child = data
-  dragData.value = { type: 'child', data: child }
+  dragData.value = {type: 'child', data: child}
   touchDragging.value = true
-  currentTouchTarget.value = event.target
+  touchStartPos.value = {x: event.touches[0].clientX, y: event.touches[0].clientY}
+  touchCurrentPos.value = {...touchStartPos.value}
 
   // 创建预览
   touchDragPreview.value = createTouchDragPreview(child)
 
   // 初始位置
-  moveDragPreview(event.touches[0].clientX, event.touches[0].clientY)
+  moveDragPreview(touchStartPos.value.x, touchStartPos.value.y)
 }
 
 const moveDragPreview = (x, y) => {
@@ -385,71 +386,59 @@ const moveDragPreview = (x, y) => {
   createDragTrail(x, y)
 }
 
-// 防抖函数 - 用于触摸移动事件
-const debounce = (fn, delay) => {
-  return (...args) => {
-    if (touchMoveDebounceTimer.value) {
-      clearTimeout(touchMoveDebounceTimer.value)
+// 检测当前触摸位置的选区
+const detectTouchArea = (x, y) => {
+  // 使用元素检测方法
+  const elements = document.elementsFromPoint(x, y)
+  for (const el of elements) {
+    if (el.classList.contains('unassigned-area')) {
+      return {type: 'source', id: null}
     }
-    touchMoveDebounceTimer.value = setTimeout(() => fn.apply(this, args), delay)
+    if (el.hasAttribute('data-area-id')) {
+      return {type: 'target', id: el.getAttribute('data-area-id')}
+    }
   }
+
+  // 如果没找到，手动遍历所有选区区域（兜底）
+  const areas = document.querySelectorAll('.selection-area')
+  for (const area of areas) {
+    const rect = area.getBoundingClientRect()
+    if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
+      return {type: 'target', id: area.dataset.areaId}
+    }
+  }
+
+  return {type: null, id: null}
 }
 
-const handleTouchMove = debounce((event) => {
+const handleTouchMove = (event) => {
   if (!touchDragging.value || !event.touches[0]) return
   event.preventDefault()
 
   const x = event.touches[0].clientX
   const y = event.touches[0].clientY
+  touchCurrentPos.value = {x, y}
+
   moveDragPreview(x, y)
 
-  // 优化选区检测逻辑
-  let targetAreaId = null
-  let inSource = false
+  // 检测当前触摸位置的区域
+  const areaInfo = detectTouchArea(x, y)
 
-  // 使用更精确的检测方法
-  const elements = document.elementsFromPoint(x, y)
-  for (const el of elements) {
-    if (el.classList.contains('unassigned-area')) {
-      inSource = true
-      break
-    }
-    if (el.hasAttribute('data-area-id')) {
-      targetAreaId = el.getAttribute('data-area-id')
-      break
-    }
-  }
-
-  // 如果没找到，手动遍历所有选区区域（兜底）
-  if (!inSource && !targetAreaId) {
-    const areas = document.querySelectorAll('.selection-area')
-    for (const area of areas) {
-      const rect = area.getBoundingClientRect()
-      if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
-        targetAreaId = area.dataset.areaId
-        break
-      }
-    }
-  }
-
-  if (inSource) {
+  // 防止重复设置相同区域
+  if (areaInfo.type === 'source' && !dragOverSource.value) {
     dragOverSource.value = true
     dragOverTarget.value = null
-  } else if (targetAreaId) {
+  } else if (areaInfo.type === 'target' && dragOverTarget.value !== areaInfo.id) {
     dragOverSource.value = false
-    dragOverTarget.value = targetAreaId
-  } else {
+    dragOverTarget.value = areaInfo.id
+    lastTouchArea.value = areaInfo.id
+  } else if (areaInfo.type === null) {
     dragOverSource.value = false
     dragOverTarget.value = null
   }
-}, 16) // 16ms 防抖时间，约60fps
+}
 
 const cleanupTouchDrag = () => {
-  if (touchMoveDebounceTimer.value) {
-    clearTimeout(touchMoveDebounceTimer.value)
-    touchMoveDebounceTimer.value = null
-  }
-
   if (touchDragPreview.value) {
     document.body.removeChild(touchDragPreview.value)
     touchDragPreview.value = null
@@ -458,7 +447,7 @@ const cleanupTouchDrag = () => {
   dragOverTarget.value = null
   dragData.value = null
   touchDragging.value = false
-  currentTouchTarget.value = null
+  lastTouchArea.value = null
 }
 
 const handleTouchEnd = async (event) => {
@@ -466,10 +455,15 @@ const handleTouchEnd = async (event) => {
   event.preventDefault()
 
   try {
-    if (dragOverSource.value) {
+    // 确定最终的投放位置
+    const x = event.changedTouches[0].clientX
+    const y = event.changedTouches[0].clientY
+    const areaInfo = detectTouchArea(x, y)
+
+    if (areaInfo.type === 'source') {
       await handleDropToSource()
-    } else if (dragOverTarget.value) {
-      await handleDropToArea(dragOverTarget.value)
+    } else if (areaInfo.type === 'target' && areaInfo.id) {
+      await handleDropToArea(areaInfo.id)
     }
   } finally {
     cleanupTouchDrag()
@@ -483,7 +477,7 @@ const handleTouchCancel = () => {
 // ========== 原有鼠标拖拽逻辑（保留用于桌面端） ==========
 
 const handleDragStart = (event, type, data) => {
-  dragData.value = { type, data }
+  dragData.value = {type, data}
   event.dataTransfer.effectAllowed = 'move'
   event.target.classList.add('dragging')
 
@@ -503,13 +497,6 @@ const handleDragStart = (event, type, data) => {
 const handleDragEnd = () => {
   dragOverSource.value = false
   dragOverTarget.value = null
-  // 清除拖拽轨迹
-  dragTrail.value.forEach(trail => {
-    if (trail.parentNode) {
-      trail.parentNode.removeChild(trail)
-    }
-  })
-  dragTrail.value = []
 }
 
 const handleDragEnter = (areaType, areaId = null) => {
@@ -542,30 +529,11 @@ const handleDropToArea = async (areaId) => {
   if (!dragData.value || dragData.value.type !== 'child') return
   const child = dragData.value.data
 
-  // 优化选区检测逻辑，避免重复查询
-  let currentArea = selectionAreas.value.find(a => a.id === areaId)
-
-  // 如果选区不存在，重新获取选区列表，确保数据是最新的
+  // 验证选区是否存在
+  const currentArea = selectionAreas.value.find(a => a.id === areaId)
   if (!currentArea) {
-    try {
-      const today = new Date().toISOString().split('T')[0]
-      const areasRes = await getSelectionAreas({class_id: selectedClassId.value, page_size: 100})
-      const freshAreas = areasRes.results?.items || areasRes.results || areasRes.data?.results || areasRes.items || areasRes || []
-
-      // 再次检查选区是否存在
-      currentArea = freshAreas.find(a => a.id === areaId)
-      if (!currentArea) {
-        showFullscreenMessage('error', '选区不存在')
-        return
-      }
-
-      // 更新选区列表
-      selectionAreas.value = freshAreas
-    } catch (error) {
-      console.error('刷新选区列表失败:', error)
-      showFullscreenMessage('error', '选区数据加载失败')
-      return
-    }
+    showFullscreenMessage('error', '选区不存在')
+    return
   }
 
   const currentCount = getChildrenByArea(areaId).length
@@ -638,7 +606,7 @@ const handleFullscreenChange = () => {
 }
 
 // 防抖函数
-const debounceResize = (fn, delay) => {
+const debounce = (fn, delay) => {
   let timer
   return (...args) => {
     clearTimeout(timer)
@@ -647,14 +615,14 @@ const debounceResize = (fn, delay) => {
 }
 
 // 窗口大小变化时更新选区宽度
-const handleResize = debounceResize(() => {
+const handleResize = debounce(() => {
   if (selectedClassId.value) {
     updateSelectionAreaWidth()
   }
 }, 300)
 
 // 监听屏幕大小变化，更新头像大小
-const handleScreenResize = debounceResize(() => {
+const handleScreenResize = debounce(() => {
   // 触发响应式更新
   selectKey.value += 1
 }, 100)
@@ -737,9 +705,6 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
-  if (touchMoveDebounceTimer.value) {
-    clearTimeout(touchMoveDebounceTimer.value)
-  }
   document.removeEventListener('fullscreenchange', handleFullscreenChange)
   document.removeEventListener('mozfullscreenchange', handleFullscreenChange)
   document.removeEventListener('webkitfullscreenchange', handleFullscreenChange)
