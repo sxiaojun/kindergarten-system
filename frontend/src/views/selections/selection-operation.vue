@@ -85,7 +85,7 @@
                 @touchcancel="handleTouchCancel"
               >
                 <div class="child-avatar">
-                  <el-avatar :size="48" :src="child.avatar">{{ child.name.charAt(0) }}</el-avatar>
+                  <el-avatar :size="childAvatarSize" :src="child.avatar">{{ child.name.charAt(0) }}</el-avatar>
                 </div>
                 <div class="child-name">{{ child.name }}</div>
               </div>
@@ -152,7 +152,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import {
   getSelectionAreas,
@@ -203,6 +203,16 @@ const unassignedChildren = computed(() => {
 const totalChildren = computed(() => allChildren.value.length)
 const assignedTodayCount = computed(() => assignedChildren.value.length)
 const unassignedCount = computed(() => totalChildren.value - assignedTodayCount.value)
+
+// 动态计算幼儿头像大小
+const childAvatarSize = computed(() => {
+  // 根据屏幕宽度动态调整头像大小
+  const screenWidth = window.innerWidth
+  if (screenWidth < 480) return 32 // 小屏幕
+  if (screenWidth < 768) return 40 // 中等屏幕
+  if (screenWidth < 1024) return 44 // 大屏幕
+  return 48 // 超大屏幕
+})
 
 // 获取班级列表
 const getClassList = async () => {
@@ -518,15 +528,7 @@ const handleDropToArea = async (areaId) => {
   const area = selectionAreas.value.find(a => a.id === areaId)
   if (!area) {
     // 如果选区不存在于当前列表中，直接报错
-    const targetElement = document.querySelector(`[data-area-id="${areaId}"]`)
-    if (targetElement) {
-      // 如果DOM中存在但数据中不存在，说明数据不一致
-      const areaName = targetElement.querySelector('.area-name-infalling')?.textContent || `选区${areaId}`
-      ElMessage.error(`选区${areaName}数据不一致，请刷新页面`)
-    } else {
-      // 如果DOM中也不存在，说明拖拽到了错误位置
-      ElMessage.error('无效的拖拽位置')
-    }
+    ElMessage.error('选区不存在')
     return
   }
 
@@ -614,6 +616,12 @@ const handleResize = debounce(() => {
   }
 }, 300)
 
+// 监听屏幕大小变化，更新头像大小
+const handleScreenResize = debounce(() => {
+  // 触发响应式更新
+  selectKey.value += 1
+}, 100)
+
 // ========== 生命周期 ==========
 
 onMounted(() => {
@@ -623,6 +631,7 @@ onMounted(() => {
   document.addEventListener('webkitfullscreenchange', handleFullscreenChange)
   document.addEventListener('msfullscreenchange', handleFullscreenChange)
   window.addEventListener('resize', handleResize)
+  window.addEventListener('resize', handleScreenResize)
   getClassList()
 
   // 全局样式确保下拉框层级
@@ -637,6 +646,7 @@ onUnmounted(() => {
   document.removeEventListener('webkitfullscreenchange', handleFullscreenChange)
   document.removeEventListener('msfullscreenchange', handleFullscreenChange)
   window.removeEventListener('resize', handleResize)
+  window.removeEventListener('resize', handleScreenResize)
 })
 </script>
 
@@ -1801,6 +1811,51 @@ onUnmounted(() => {
   .child-item:active {
     transform: scale(1.1);
     box-shadow: 0 8px 25px rgba(0, 0, 0, 0.5);
+  }
+}
+
+/* 动态调整幼儿头像大小的响应式样式 */
+.child-avatar {
+  transition: width 0.3s ease, height 0.3s ease;
+}
+
+@media (max-width: 480px) {
+  .child-avatar {
+    width: 32px !important;
+    height: 32px !important;
+  }
+  .child-name {
+    font-size: 12px;
+  }
+}
+
+@media (min-width: 481px) and (max-width: 768px) {
+  .child-avatar {
+    width: 40px !important;
+    height: 40px !important;
+  }
+  .child-name {
+    font-size: 14px;
+  }
+}
+
+@media (min-width: 769px) and (max-width: 1024px) {
+  .child-avatar {
+    width: 44px !important;
+    height: 44px !important;
+  }
+  .child-name {
+    font-size: 16px;
+  }
+}
+
+@media (min-width: 1025px) {
+  .child-avatar {
+    width: 48px !important;
+    height: 48px !important;
+  }
+  .child-name {
+    font-size: 18px;
   }
 }
 
