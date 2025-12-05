@@ -354,10 +354,10 @@ const handleTouchMove = (event) => {
   const y = event.touches[0].clientY
   moveDragPreview(x, y)
 
-  // 检测是否进入 source 或 target 区域
+  // 先尝试 elementsFromPoint（快速路径）
   const elements = document.elementsFromPoint(x, y)
-  let inSource = false
   let targetAreaId = null
+  let inSource = false
 
   for (const el of elements) {
     if (el.classList.contains('unassigned-area')) {
@@ -367,6 +367,18 @@ const handleTouchMove = (event) => {
     if (el.hasAttribute('data-area-id')) {
       targetAreaId = el.getAttribute('data-area-id')
       break
+    }
+  }
+
+  // 如果没找到，手动遍历所有选区区域（兜底）
+  if (!inSource && !targetAreaId) {
+    const areas = document.querySelectorAll('.selection-area')
+    for (const area of areas) {
+      const rect = area.getBoundingClientRect()
+      if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
+        targetAreaId = area.dataset.areaId
+        break
+      }
     }
   }
 
