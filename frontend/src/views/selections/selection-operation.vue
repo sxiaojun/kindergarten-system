@@ -458,7 +458,7 @@ const handleTouchCancel = () => {
 // ========== 原有鼠标拖拽逻辑（保留用于桌面端） ==========
 
 const handleDragStart = (event, type, data) => {
-  dragData.value = { type, data }
+  dragData.value = {type, data}
   event.dataTransfer.effectAllowed = 'move'
   event.target.classList.add('dragging')
 
@@ -503,6 +503,7 @@ const handleDropToSource = async () => {
       assignedChildren.value = assignedChildren.value.filter(r => r.id !== record.id)
       ElMessage.success(`${child.name}已取消分配`)
     } catch (error) {
+      console.error('取消分配失败:', error)
       ElMessage.error('取消分配失败')
     }
   }
@@ -513,7 +514,15 @@ const handleDropToArea = async (areaId) => {
   const child = dragData.value.data
   const area = selectionAreas.value.find(a => a.id === areaId)
   if (!area) {
-    ElMessage.error('选区不存在')
+    // 查找当前页面中的选区元素
+    const targetElement = document.querySelector(`[data-area-id="${areaId}"]`)
+    if (targetElement) {
+      // 从DOM元素中获取选区信息
+      const areaName = targetElement.querySelector('.area-name-infalling')?.textContent || `选区${areaId}`
+      ElMessage.error(`选区${areaName}不存在`)
+    } else {
+      ElMessage.error('选区不存在')
+    }
     return
   }
 
@@ -532,16 +541,17 @@ const handleDropToArea = async (areaId) => {
   const existingRecord = assignedChildren.value.find(r => r && r.child_id === child.id)
   try {
     if (existingRecord) {
-      await updateSelectionRecord(existingRecord.id, { selection_area_id: areaId })
+      await updateSelectionRecord(existingRecord.id, {selection_area_id: areaId})
       const index = assignedChildren.value.findIndex(r => r && r.id === existingRecord.id)
       if (index !== -1) assignedChildren.value[index].selection_area_id = areaId
       ElMessage.success(`${child.name}已重新分配到${area.name}`)
     } else {
-      const res = await createSelectionRecord({ child_id: child.id, selection_area_id: areaId })
+      const res = await createSelectionRecord({child_id: child.id, selection_area_id: areaId})
       assignedChildren.value.push(res.data)
       ElMessage.success(`${child.name}已分配到${area.name}`)
     }
   } catch (error) {
+    console.error('分配失败:', error)
     ElMessage.error('分配失败')
   }
 }
@@ -573,10 +583,10 @@ const toggleFullscreen = () => {
 
 const handleFullscreenChange = () => {
   isFullscreen.value = !!(
-    document.fullscreenElement ||
-    document.mozFullScreenElement ||
-    document.webkitFullscreenElement ||
-    document.msFullscreenElement
+      document.fullscreenElement ||
+      document.mozFullScreenElement ||
+      document.webkitFullscreenElement ||
+      document.msFullscreenElement
   )
   selectKey.value += 1
   nextTick(() => {
@@ -801,56 +811,305 @@ onUnmounted(() => {
 }
 
 /* 为每个粒子设置不同的初始位置和动画延迟 */
-.floating-particle:nth-child(1) { top: 10%; left: 10%; animation-delay: 0s; }
-.floating-particle:nth-child(2) { top: 20%; left: 80%; animation-delay: 1s; }
-.floating-particle:nth-child(3) { top: 30%; left: 30%; animation-delay: 2s; }
-.floating-particle:nth-child(4) { top: 40%; left: 70%; animation-delay: 3s; }
-.floating-particle:nth-child(5) { top: 50%; left: 20%; animation-delay: 4s; }
-.floating-particle:nth-child(6) { top: 60%; left: 60%; animation-delay: 5s; }
-.floating-particle:nth-child(7) { top: 70%; left: 40%; animation-delay: 6s; }
-.floating-particle:nth-child(8) { top: 80%; left: 80%; animation-delay: 7s; }
-.floating-particle:nth-child(9) { top: 15%; left: 50%; animation-delay: 0.5s; }
-.floating-particle:nth-child(10) { top: 25%; left: 25%; animation-delay: 1.5s; }
-.floating-particle:nth-child(11) { top: 35%; left: 65%; animation-delay: 2.5s; }
-.floating-particle:nth-child(12) { top: 45%; left: 15%; animation-delay: 3.5s; }
-.floating-particle:nth-child(13) { top: 55%; left: 55%; animation-delay: 4.5s; }
-.floating-particle:nth-child(14) { top: 65%; left: 35%; animation-delay: 5.5s; }
-.floating-particle:nth-child(15) { top: 75%; left: 75%; animation-delay: 6.5s; }
-.floating-particle:nth-child(16) { top: 85%; left: 45%; animation-delay: 7.5s; }
-.floating-particle:nth-child(17) { top: 12%; left: 90%; animation-delay: 0.8s; }
-.floating-particle:nth-child(18) { top: 22%; left: 10%; animation-delay: 1.8s; }
-.floating-particle:nth-child(19) { top: 32%; left: 80%; animation-delay: 2.8s; }
-.floating-particle:nth-child(20) { top: 42%; left: 20%; animation-delay: 3.8s; }
-.floating-particle:nth-child(21) { top: 52%; left: 60%; animation-delay: 4.8s; }
-.floating-particle:nth-child(22) { top: 62%; left: 30%; animation-delay: 5.8s; }
-.floating-particle:nth-child(23) { top: 72%; left: 70%; animation-delay: 6.8s; }
-.floating-particle:nth-child(24) { top: 82%; left: 40%; animation-delay: 7.8s; }
-.floating-particle:nth-child(25) { top: 18%; left: 15%; animation-delay: 0.3s; }
-.floating-particle:nth-child(26) { top: 28%; left: 85%; animation-delay: 1.3s; }
-.floating-particle:nth-child(27) { top: 38%; left: 35%; animation-delay: 2.3s; }
-.floating-particle:nth-child(28) { top: 48%; left: 65%; animation-delay: 3.3s; }
-.floating-particle:nth-child(29) { top: 58%; left: 25%; animation-delay: 4.3s; }
-.floating-particle:nth-child(30) { top: 68%; left: 75%; animation-delay: 5.3s; }
-.floating-particle:nth-child(31) { top: 5%; left: 40%; animation-delay: 0.2s; }
-.floating-particle:nth-child(32) { top: 15%; left: 70%; animation-delay: 1.2s; }
-.floating-particle:nth-child(33) { top: 25%; left: 10%; animation-delay: 2.2s; }
-.floating-particle:nth-child(34) { top: 35%; left: 80%; animation-delay: 3.2s; }
-.floating-particle:nth-child(35) { top: 45%; left: 30%; animation-delay: 4.2s; }
-.floating-particle:nth-child(36) { top: 55%; left: 60%; animation-delay: 5.2s; }
-.floating-particle:nth-child(37) { top: 65%; left: 20%; animation-delay: 6.2s; }
-.floating-particle:nth-child(38) { top: 75%; left: 90%; animation-delay: 7.2s; }
-.floating-particle:nth-child(39) { top: 85%; left: 50%; animation-delay: 0.7s; }
-.floating-particle:nth-child(40) { top: 95%; left: 25%; animation-delay: 1.7s; }
-.floating-particle:nth-child(41) { top: 8%; left: 65%; animation-delay: 2.7s; }
-.floating-particle:nth-child(42) { top: 18%; left: 15%; animation-delay: 3.7s; }
-.floating-particle:nth-child(43) { top: 28%; left: 75%; animation-delay: 4.7s; }
-.floating-particle:nth-child(44) { top: 38%; left: 35%; animation-delay: 5.7s; }
-.floating-particle:nth-child(45) { top: 48%; left: 85%; animation-delay: 6.7s; }
-.floating-particle:nth-child(46) { top: 58%; left: 45%; animation-delay: 7.7s; }
-.floating-particle:nth-child(47) { top: 68%; left: 5%; animation-delay: 0.9s; }
-.floating-particle:nth-child(48) { top: 78%; left: 55%; animation-delay: 1.9s; }
-.floating-particle:nth-child(49) { top: 88%; left: 95%; animation-delay: 2.9s; }
-.floating-particle:nth-child(50) { top: 3%; left: 30%; animation-delay: 3.9s; }
+.floating-particle:nth-child(1) {
+  top: 10%;
+  left: 10%;
+  animation-delay: 0s;
+}
+
+.floating-particle:nth-child(2) {
+  top: 20%;
+  left: 80%;
+  animation-delay: 1s;
+}
+
+.floating-particle:nth-child(3) {
+  top: 30%;
+  left: 30%;
+  animation-delay: 2s;
+}
+
+.floating-particle:nth-child(4) {
+  top: 40%;
+  left: 70%;
+  animation-delay: 3s;
+}
+
+.floating-particle:nth-child(5) {
+  top: 50%;
+  left: 20%;
+  animation-delay: 4s;
+}
+
+.floating-particle:nth-child(6) {
+  top: 60%;
+  left: 60%;
+  animation-delay: 5s;
+}
+
+.floating-particle:nth-child(7) {
+  top: 70%;
+  left: 40%;
+  animation-delay: 6s;
+}
+
+.floating-particle:nth-child(8) {
+  top: 80%;
+  left: 80%;
+  animation-delay: 7s;
+}
+
+.floating-particle:nth-child(9) {
+  top: 15%;
+  left: 50%;
+  animation-delay: 0.5s;
+}
+
+.floating-particle:nth-child(10) {
+  top: 25%;
+  left: 25%;
+  animation-delay: 1.5s;
+}
+
+.floating-particle:nth-child(11) {
+  top: 35%;
+  left: 65%;
+  animation-delay: 2.5s;
+}
+
+.floating-particle:nth-child(12) {
+  top: 45%;
+  left: 15%;
+  animation-delay: 3.5s;
+}
+
+.floating-particle:nth-child(13) {
+  top: 55%;
+  left: 55%;
+  animation-delay: 4.5s;
+}
+
+.floating-particle:nth-child(14) {
+  top: 65%;
+  left: 35%;
+  animation-delay: 5.5s;
+}
+
+.floating-particle:nth-child(15) {
+  top: 75%;
+  left: 75%;
+  animation-delay: 6.5s;
+}
+
+.floating-particle:nth-child(16) {
+  top: 85%;
+  left: 45%;
+  animation-delay: 7.5s;
+}
+
+.floating-particle:nth-child(17) {
+  top: 12%;
+  left: 90%;
+  animation-delay: 0.8s;
+}
+
+.floating-particle:nth-child(18) {
+  top: 22%;
+  left: 10%;
+  animation-delay: 1.8s;
+}
+
+.floating-particle:nth-child(19) {
+  top: 32%;
+  left: 80%;
+  animation-delay: 2.8s;
+}
+
+.floating-particle:nth-child(20) {
+  top: 42%;
+  left: 20%;
+  animation-delay: 3.8s;
+}
+
+.floating-particle:nth-child(21) {
+  top: 52%;
+  left: 60%;
+  animation-delay: 4.8s;
+}
+
+.floating-particle:nth-child(22) {
+  top: 62%;
+  left: 30%;
+  animation-delay: 5.8s;
+}
+
+.floating-particle:nth-child(23) {
+  top: 72%;
+  left: 70%;
+  animation-delay: 6.8s;
+}
+
+.floating-particle:nth-child(24) {
+  top: 82%;
+  left: 40%;
+  animation-delay: 7.8s;
+}
+
+.floating-particle:nth-child(25) {
+  top: 18%;
+  left: 15%;
+  animation-delay: 0.3s;
+}
+
+.floating-particle:nth-child(26) {
+  top: 28%;
+  left: 85%;
+  animation-delay: 1.3s;
+}
+
+.floating-particle:nth-child(27) {
+  top: 38%;
+  left: 35%;
+  animation-delay: 2.3s;
+}
+
+.floating-particle:nth-child(28) {
+  top: 48%;
+  left: 65%;
+  animation-delay: 3.3s;
+}
+
+.floating-particle:nth-child(29) {
+  top: 58%;
+  left: 25%;
+  animation-delay: 4.3s;
+}
+
+.floating-particle:nth-child(30) {
+  top: 68%;
+  left: 75%;
+  animation-delay: 5.3s;
+}
+
+.floating-particle:nth-child(31) {
+  top: 5%;
+  left: 40%;
+  animation-delay: 0.2s;
+}
+
+.floating-particle:nth-child(32) {
+  top: 15%;
+  left: 70%;
+  animation-delay: 1.2s;
+}
+
+.floating-particle:nth-child(33) {
+  top: 25%;
+  left: 10%;
+  animation-delay: 2.2s;
+}
+
+.floating-particle:nth-child(34) {
+  top: 35%;
+  left: 80%;
+  animation-delay: 3.2s;
+}
+
+.floating-particle:nth-child(35) {
+  top: 45%;
+  left: 30%;
+  animation-delay: 4.2s;
+}
+
+.floating-particle:nth-child(36) {
+  top: 55%;
+  left: 60%;
+  animation-delay: 5.2s;
+}
+
+.floating-particle:nth-child(37) {
+  top: 65%;
+  left: 20%;
+  animation-delay: 6.2s;
+}
+
+.floating-particle:nth-child(38) {
+  top: 75%;
+  left: 90%;
+  animation-delay: 7.2s;
+}
+
+.floating-particle:nth-child(39) {
+  top: 85%;
+  left: 50%;
+  animation-delay: 0.7s;
+}
+
+.floating-particle:nth-child(40) {
+  top: 95%;
+  left: 25%;
+  animation-delay: 1.7s;
+}
+
+.floating-particle:nth-child(41) {
+  top: 8%;
+  left: 65%;
+  animation-delay: 2.7s;
+}
+
+.floating-particle:nth-child(42) {
+  top: 18%;
+  left: 15%;
+  animation-delay: 3.7s;
+}
+
+.floating-particle:nth-child(43) {
+  top: 28%;
+  left: 75%;
+  animation-delay: 4.7s;
+}
+
+.floating-particle:nth-child(44) {
+  top: 38%;
+  left: 35%;
+  animation-delay: 5.7s;
+}
+
+.floating-particle:nth-child(45) {
+  top: 48%;
+  left: 85%;
+  animation-delay: 6.7s;
+}
+
+.floating-particle:nth-child(46) {
+  top: 58%;
+  left: 45%;
+  animation-delay: 7.7s;
+}
+
+.floating-particle:nth-child(47) {
+  top: 68%;
+  left: 5%;
+  animation-delay: 0.9s;
+}
+
+.floating-particle:nth-child(48) {
+  top: 78%;
+  left: 55%;
+  animation-delay: 1.9s;
+}
+
+.floating-particle:nth-child(49) {
+  top: 88%;
+  left: 95%;
+  animation-delay: 2.9s;
+}
+
+.floating-particle:nth-child(50) {
+  top: 3%;
+  left: 30%;
+  animation-delay: 3.9s;
+}
 
 /* 发光球体 */
 .glowing-orb {
@@ -955,11 +1214,11 @@ onUnmounted(() => {
   position: absolute;
   border-radius: 50%;
   background: radial-gradient(
-    ellipse at center,
-    rgba(120, 100, 255, 0.3) 0%,
-    rgba(80, 60, 200, 0.2) 40%,
-    rgba(40, 30, 100, 0.1) 70%,
-    transparent 100%
+      ellipse at center,
+      rgba(120, 100, 255, 0.3) 0%,
+      rgba(80, 60, 200, 0.2) 40%,
+      rgba(40, 30, 100, 0.1) 70%,
+      transparent 100%
   );
   filter: blur(20px);
   animation: nebulaFloat 25s infinite linear;
@@ -980,11 +1239,11 @@ onUnmounted(() => {
   height: 200px;
   animation-delay: 5s;
   background: radial-gradient(
-    ellipse at center,
-    rgba(255, 100, 150, 0.3) 0%,
-    rgba(200, 60, 100, 0.2) 40%,
-    rgba(100, 30, 50, 0.1) 70%,
-    transparent 100%
+      ellipse at center,
+      rgba(255, 100, 150, 0.3) 0%,
+      rgba(200, 60, 100, 0.2) 40%,
+      rgba(100, 30, 50, 0.1) 70%,
+      transparent 100%
   );
 }
 
@@ -1237,10 +1496,9 @@ onUnmounted(() => {
   height: 60px;
   background: #000;
   border-radius: 50%;
-  box-shadow:
-    0 0 40px #000,
-    0 0 80px #000,
-    0 0 120px #000;
+  box-shadow: 0 0 40px #000,
+  0 0 80px #000,
+  0 0 120px #000;
   z-index: 10;
   animation: blackHolePulse 3s infinite alternate;
 }
@@ -1281,12 +1539,12 @@ onUnmounted(() => {
   height: 200px;
   border-radius: 50%;
   background: conic-gradient(
-    from 0deg,
-    rgba(255, 255, 255, 0.1),
-    rgba(255, 255, 255, 0.2),
-    rgba(255, 255, 255, 0.3),
-    rgba(255, 255, 255, 0.2),
-    rgba(255, 255, 255, 0.1)
+      from 0deg,
+      rgba(255, 255, 255, 0.1),
+      rgba(255, 255, 255, 0.2),
+      rgba(255, 255, 255, 0.3),
+      rgba(255, 255, 255, 0.2),
+      rgba(255, 255, 255, 0.1)
   );
   animation: rotateDisk 20s linear infinite;
   opacity: 0.5;
@@ -1330,18 +1588,53 @@ onUnmounted(() => {
 }
 
 /* 为每个粒子设置不同的轨道 */
-.black-hole-particle:nth-child(1) { animation-delay: 0s; }
-.black-hole-particle:nth-child(2) { animation-delay: 0.4s; }
-.black-hole-particle:nth-child(3) { animation-delay: 0.8s; }
-.black-hole-particle:nth-child(4) { animation-delay: 1.2s; }
-.black-hole-particle:nth-child(5) { animation-delay: 1.6s; }
-.black-hole-particle:nth-child(6) { animation-delay: 2s; }
-.black-hole-particle:nth-child(7) { animation-delay: 2.4s; }
-.black-hole-particle:nth-child(8) { animation-delay: 2.8s; }
-.black-hole-particle:nth-child(9) { animation-delay: 3.2s; }
-.black-hole-particle:nth-child(10) { animation-delay: 3.6s; }
-.black-hole-particle:nth-child(11) { animation-delay: 4s; }
-.black-hole-particle:nth-child(12) { animation-delay: 4.4s; }
+.black-hole-particle:nth-child(1) {
+  animation-delay: 0s;
+}
+
+.black-hole-particle:nth-child(2) {
+  animation-delay: 0.4s;
+}
+
+.black-hole-particle:nth-child(3) {
+  animation-delay: 0.8s;
+}
+
+.black-hole-particle:nth-child(4) {
+  animation-delay: 1.2s;
+}
+
+.black-hole-particle:nth-child(5) {
+  animation-delay: 1.6s;
+}
+
+.black-hole-particle:nth-child(6) {
+  animation-delay: 2s;
+}
+
+.black-hole-particle:nth-child(7) {
+  animation-delay: 2.4s;
+}
+
+.black-hole-particle:nth-child(8) {
+  animation-delay: 2.8s;
+}
+
+.black-hole-particle:nth-child(9) {
+  animation-delay: 3.2s;
+}
+
+.black-hole-particle:nth-child(10) {
+  animation-delay: 3.6s;
+}
+
+.black-hole-particle:nth-child(11) {
+  animation-delay: 4s;
+}
+
+.black-hole-particle:nth-child(12) {
+  animation-delay: 4.4s;
+}
 
 /* 吸入的选区名称 */
 .area-name-infalling {
@@ -1537,6 +1830,7 @@ onUnmounted(() => {
   background-color: #e6f7ff !important;
   font-weight: bold;
 }
+
 .el-select-dropdown {
   z-index: 9999 !important;
   max-height: 300px !important;
@@ -1705,7 +1999,7 @@ onUnmounted(() => {
   .selection-areas {
     gap: 8px;
   }
-  
+
   .selection-area {
     min-height: 100px;
   }
@@ -1755,22 +2049,22 @@ onUnmounted(() => {
     min-width: 90px;
     padding: 10px;
   }
-  
+
   .child-avatar {
     transform: scale(1.2);
   }
-  
+
   .child-name {
     font-size: 16px;
     margin-top: 8px;
   }
-  
+
   /* 增加选区区域的触摸友好性 */
   .selection-area {
     min-height: 180px;
     min-width: 180px;
   }
-  
+
   /* 增加拖拽区域的触摸友好性 */
   .unassigned-area {
     min-height: 200px;
@@ -1783,7 +2077,7 @@ onUnmounted(() => {
     transform: scale(1.05);
     box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
   }
-  
+
   .child-item:active {
     transform: scale(1.1);
     box-shadow: 0 8px 25px rgba(0, 0, 0, 0.5);
