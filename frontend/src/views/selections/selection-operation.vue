@@ -52,7 +52,7 @@
         <div class="card-header">
           <span>选区分配</span>
           <div class="stats-info">
-            总人数: {{ totalChildren }} | 已分配: {{ assignedChildrenCount }} | 未分配: {{ unassignedChildren.length }}
+            总人数: {{ totalChildren }} | 已分配: {{ assignedTodayCount }} | 未分配: {{ unassignedCount }}
           </div>
         </div>
       </template>
@@ -154,9 +154,9 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
-import { 
+import {
   getSelectionAreas,
   getSelectionRecords,
   createSelectionRecord,
@@ -169,11 +169,9 @@ import classApi from '@/api/classes'
 // 状态管理
 const loading = ref(false)
 const selectedClassId = ref('')
-const selectKey = ref(0) // 用于强制刷新select组件
-const containerRef = ref(null) // 容器引用
-const formModel = reactive({
-  selectedClassId: ''
-})
+const selectKey = ref(0)
+const containerRef = ref(null)
+const formModel = reactive({ selectedClassId: '' })
 const classList = ref([])
 const selectionAreas = ref([])
 const allChildren = ref([])
@@ -185,56 +183,35 @@ const isFullscreen = ref(false)
 const fullscreenElement = ref(null)
 const dropdownPlaceholder = ref(null)
 
-// 获取随机位置函数
-const getRandomPosition = (type) => {
-  if (type === 'top') {
-    // 随机生成顶部或底部位置
-    return Math.random() > 0.5 ? '-20px' : '100%'
-  } else {
-    // 随机生成左侧或右侧位置
-    return Math.random() * 100 + '%'
-  }
-}
+// Touch 拖拽状态
+const touchDragging = ref(false)
+const touchDragPreview = ref(null)
+const currentTouchTarget = ref(null)
 
-// 获取随机起始位置
+// 获取随机起始位置（用于黑洞文字动画）
 const getRandomStartPosition = (axis) => {
-  if (axis === 'x') {
-    // 生成-200px到容器宽度+200px之间的随机值
-    return (Math.random() * 400 - 200) + 'px'
-  } else {
-    // 生成-200px到容器高度+200px之间的随机值
-    return (Math.random() * 400 - 200) + 'px'
-  }
-}
-
-// 获取随机字体大小
-const getRandomFontSize = () => {
-  const sizes = ['16px', '18px', '20px', '22px', '24px']
-  return sizes[Math.floor(Math.random() * sizes.length)]
+  return (Math.random() * 400 - 200) + 'px'
 }
 
 // 计算未分配幼儿
 const unassignedChildren = computed(() => {
   const assignedIds = assignedChildren.value
-    .filter(item => item && item.child_id)  // 添加 item 存在性检查
+    .filter(item => item && item.child_id)
     .map(item => item.child_id)
   return allChildren.value.filter(child => !assignedIds.includes(child.id))
 })
 
-// 计算统计信息
 const totalChildren = computed(() => allChildren.value.length)
-const assignedChildrenCount = computed(() => assignedChildren.value.length)
+const assignedTodayCount = computed(() => assignedChildren.value.length)
+const unassignedCount = computed(() => totalChildren.value - assignedTodayCount.value)
 
 // 获取班级列表
 const getClassList = async () => {
   try {
     const res = await classApi.getClassList({ page_size: 100 })
-    // 处理分页数据结构的变化
     if (res && res.results) {
-      // 新的DRF分页格式 - 数据在results.items中
       classList.value = Array.isArray(res.results.items) ? res.results.items : res.results
     } else {
-      // 兼容旧格式
       classList.value = res.data?.results || res.items || res || []
     }
     if (classList.value.length > 0 && !selectedClassId.value) {
@@ -249,64 +226,38 @@ const getClassList = async () => {
 
 // 处理班级切换
 const handleClassChange = async () => {
-  console.log('班级切换事件触发，当前选中班级ID:', selectedClassId.value) // 调试日志
-  
   if (!selectedClassId.value) {
-    // 重置数据
     selectionAreas.value = []
     allChildren.value = []
     assignedChildren.value = []
     return
   }
-  
+
   loading.value = true
   try {
-    // 获取该班级的选区
-    const areasRes = await getSelectionAreas({ 
-      class_id: selectedClassId.value,
-      page_size: 100 
-    })
-    console.log('获取选区结果:', areasRes) // 调试日志
-    // 处理分页数据结构的变化
-    if (areasRes && areasRes.results) {
-      // 新的DRF分页格式 - 数据在results.items中
-      selectionAreas.value = Array.isArray(areasRes.results.items) ? areasRes.results.items : areasRes.results
-    } else {
-      // 兼容旧格式
-      selectionAreas.value = areasRes.data?.results || areasRes.items || areasRes || []
-    }
+    // 获取今天的日期，格式为 YYYY-MM-DD
+    const today = new Date().toISOString().split('T')[0]
     
-    // 获取该班级的幼儿
-    const childrenRes = await childApi.getChildrenList({ 
-      class_id: selectedClassId.value,
-      page_size: 200 
-    })
-    console.log('获取幼儿结果:', childrenRes) // 调试日志
-    // 处理分页数据结构的变化
-    if (childrenRes && childrenRes.results) {
-      // 新的DRF分页格式 - 数据在results.items中
-      allChildren.value = Array.isArray(childrenRes.results.items) ? childrenRes.results.items : childrenRes.results
-    } else {
-      // 兼容旧格式
-      allChildren.value = childrenRes.data?.results || childrenRes.items || childrenRes || []
-    }
+    const [areasRes, childrenRes, recordsRes] = await Promise.all([
+      getSelectionAreas({ class_id: selectedClassId.value, page_size: 100 }),
+      childApi.getChildrenList({ class_id: selectedClassId.value, page_size: 200 }),
+      getSelectionRecords({ 
+        class_id: selectedClassId.value, 
+        page_size: 200,
+        date_from: today,
+        date_to: today,
+        is_active: true
+      })
+    ])
     
-    // 获取该班级的选区记录
-    const recordsRes = await getSelectionRecords({ 
-      class_id: selectedClassId.value,
-      page_size: 200 
-    })
-    console.log('获取选区记录结果:', recordsRes) // 调试日志
-    // 处理分页数据结构的变化
-    if (recordsRes && recordsRes.results) {
-      // 新的DRF分页格式 - 数据在results.items中
-      assignedChildren.value = Array.isArray(recordsRes.results.items) ? recordsRes.results.items : recordsRes.results
-    } else {
-      // 兼容旧格式
-      assignedChildren.value = recordsRes.data?.results || recordsRes.items || recordsRes || []
-    }
-    
-    console.log('数据加载完成') // 调试日志
+
+    selectionAreas.value = areasRes.results?.items || areasRes.results || areasRes.data?.results || areasRes.items || areasRes || []
+    allChildren.value = childrenRes.results?.items || childrenRes.results || childrenRes.data?.results || childrenRes.items || childrenRes || []
+    assignedChildren.value = recordsRes.results?.items || recordsRes.results || recordsRes.data?.results || recordsRes.items || recordsRes || []
+
+    // 更新选区宽度
+    updateSelectionAreaWidth()
+
   } catch (error) {
     console.error('获取数据失败:', error)
     ElMessage.error('获取数据失败')
@@ -315,36 +266,160 @@ const handleClassChange = async () => {
   }
 }
 
-// 根据选区ID获取幼儿列表
+// 根据选区数量动态调整宽度
+const updateSelectionAreaWidth = () => {
+  nextTick(() => {
+    const container = document.querySelector('.selection-areas')
+    if (!container || selectionAreas.value.length === 0) return
+
+    const containerWidth = container.clientWidth
+    const gap = 20 // 与 CSS 中 gap 一致
+    const totalGap = (selectionAreas.value.length - 1) * gap
+    const availableWidth = containerWidth - totalGap
+    const idealWidth = availableWidth / selectionAreas.value.length
+
+    // 设置最小宽度（比如 100px），防止太小无法点击
+    const finalWidth = Math.max(idealWidth, 100)
+
+    // 应用到所有 .selection-area
+    const areas = container.querySelectorAll('.selection-area')
+    areas.forEach(area => {
+      area.style.width = `${finalWidth}px`
+      area.style.minWidth = `${finalWidth}px`
+    })
+  })
+}
+
+// 根据选区ID获取已分配幼儿
 const getChildrenByArea = (areaId) => {
   const assignedChildIds = assignedChildren.value
-    .filter(record => record && record.selection_area_id === areaId)  // 添加 record 存在性检查
+    .filter(record => record && record.selection_area_id === areaId)
     .map(record => record.child_id)
-
   return allChildren.value.filter(child => assignedChildIds.includes(child.id))
 }
 
-// 计算年龄
-const calculateAge = (birthDate) => {
-  const today = new Date()
-  const birth = new Date(birthDate)
-  let age = today.getFullYear() - birth.getFullYear()
-  const monthDiff = today.getMonth() - birth.getMonth()
-  
-  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
-    age--
-  }
-  
-  return age
+// ========== 触摸拖拽核心逻辑 ==========
+
+const createTouchDragPreview = (child) => {
+  const preview = document.createElement('div')
+  preview.className = 'drag-preview touch-drag-preview'
+  preview.innerHTML = `
+    <div style="display:flex;align-items:center;gap:8px;">
+      <el-avatar size="40" src="${child.avatar || ''}">${child.name.charAt(0)}</el-avatar>
+      <span>${child.name}</span>
+    </div>
+  `
+  preview.style.position = 'fixed'
+  preview.style.pointerEvents = 'none'
+  preview.style.zIndex = '9999'
+  preview.style.opacity = '0.9'
+  preview.style.background = 'rgba(30,30,46,0.9)'
+  preview.style.borderRadius = '8px'
+  preview.style.padding = '6px 12px'
+  preview.style.boxShadow = '0 4px 20px rgba(0,0,0,0.5)'
+  preview.style.fontSize = '14px'
+  preview.style.color = '#fff'
+  document.body.appendChild(preview)
+  return preview
 }
 
-// 拖拽相关处理
+const handleTouchStart = (event, type, data) => {
+  if (type !== 'child') return
+
+  event.preventDefault()
+  const child = data
+  dragData.value = { type: 'child', data: child }
+  touchDragging.value = true
+  currentTouchTarget.value = event.target
+
+  // 创建预览
+  touchDragPreview.value = createTouchDragPreview(child)
+
+  // 初始位置
+  moveDragPreview(event.touches[0].clientX, event.touches[0].clientY)
+}
+
+const moveDragPreview = (x, y) => {
+  if (touchDragPreview.value) {
+    touchDragPreview.value.style.left = `${x + 10}px`
+    touchDragPreview.value.style.top = `${y + 10}px`
+  }
+}
+
+const handleTouchMove = (event) => {
+  if (!touchDragging.value || !event.touches[0]) return
+  event.preventDefault()
+
+  const x = event.touches[0].clientX
+  const y = event.touches[0].clientY
+  moveDragPreview(x, y)
+
+  // 检测是否进入 source 或 target 区域
+  const elements = document.elementsFromPoint(x, y)
+  let inSource = false
+  let targetAreaId = null
+
+  for (const el of elements) {
+    if (el.classList.contains('unassigned-area')) {
+      inSource = true
+      break
+    }
+    if (el.hasAttribute('data-area-id')) {
+      targetAreaId = el.getAttribute('data-area-id')
+      break
+    }
+  }
+
+  if (inSource) {
+    dragOverSource.value = true
+    dragOverTarget.value = null
+  } else if (targetAreaId) {
+    dragOverSource.value = false
+    dragOverTarget.value = targetAreaId
+  } else {
+    dragOverSource.value = false
+    dragOverTarget.value = null
+  }
+}
+
+const cleanupTouchDrag = () => {
+  if (touchDragPreview.value) {
+    document.body.removeChild(touchDragPreview.value)
+    touchDragPreview.value = null
+  }
+  dragOverSource.value = false
+  dragOverTarget.value = null
+  dragData.value = null
+  touchDragging.value = false
+  currentTouchTarget.value = null
+}
+
+const handleTouchEnd = async (event) => {
+  if (!touchDragging.value) return
+  event.preventDefault()
+
+  try {
+    if (dragOverSource.value) {
+      await handleDropToSource()
+    } else if (dragOverTarget.value) {
+      await handleDropToArea(dragOverTarget.value)
+    }
+  } finally {
+    cleanupTouchDrag()
+  }
+}
+
+const handleTouchCancel = () => {
+  cleanupTouchDrag()
+}
+
+// ========== 原有鼠标拖拽逻辑（保留用于桌面端） ==========
+
 const handleDragStart = (event, type, data) => {
   dragData.value = { type, data }
   event.dataTransfer.effectAllowed = 'move'
   event.target.classList.add('dragging')
-  
-  // 添加拖拽预览效果
+
   const dragImage = event.target.cloneNode(true)
   dragImage.style.opacity = '0.8'
   dragImage.style.transform = 'scale(1.1)'
@@ -352,65 +427,27 @@ const handleDragStart = (event, type, data) => {
   document.body.appendChild(dragImage)
   event.dataTransfer.setDragImage(dragImage, 0, 0)
   setTimeout(() => document.body.removeChild(dragImage), 0)
-  
-  // 创建拖拽轨迹点
-  if (event.clientX && event.clientY) {
-    createDragTrail(event.clientX, event.clientY)
-  }
 }
 
-const handleDragEnd = (event) => {
-  event.target.classList.remove('dragging')
+const handleDragEnd = () => {
   dragOverSource.value = false
   dragOverTarget.value = null
 }
 
 const handleDragEnter = (areaType, areaId = null) => {
-  if (areaType === 'source') {
-    dragOverSource.value = true
-  } else if (areaType === 'target') {
-    dragOverTarget.value = areaId
-  }
+  if (areaType === 'source') dragOverSource.value = true
+  else if (areaType === 'target') dragOverTarget.value = areaId
 }
 
 const handleDragLeave = (areaType) => {
-  if (areaType === 'source') {
-    dragOverSource.value = false
-  } else if (areaType === 'target') {
-    dragOverTarget.value = null
-  }
+  if (areaType === 'source') dragOverSource.value = false
+  else if (areaType === 'target') dragOverTarget.value = null
 }
 
-// 创建拖拽轨迹点
-const createDragTrail = (x, y) => {
-  const trail = document.createElement('div')
-  trail.className = 'drag-trail'
-  trail.style.left = `${x}px`
-  trail.style.top = `${y}px`
-  document.body.appendChild(trail)
-  
-  // 移除轨迹点
-  setTimeout(() => {
-    if (trail.parentNode) {
-      trail.parentNode.removeChild(trail)
-    }
-  }, 500)
-}
-
-// 监听鼠标移动以创建轨迹
-document.addEventListener('dragover', (e) => {
-  if (dragData.value) {
-    createDragTrail(e.clientX, e.clientY)
-  }
-})
-
-// 拖拽到未分配区域
 const handleDropToSource = async () => {
   if (!dragData.value || dragData.value.type !== 'child') return
-  
   const child = dragData.value.data
   const record = assignedChildren.value.find(r => r.child_id === child.id)
-  
   if (record) {
     try {
       await deleteSelectionRecord(record.id)
@@ -420,280 +457,124 @@ const handleDropToSource = async () => {
       ElMessage.error('取消分配失败')
     }
   }
-  
-  dragOverSource.value = false
-  dragData.value = null
 }
 
-// 拖拽到选区
 const handleDropToArea = async (areaId) => {
   if (!dragData.value || dragData.value.type !== 'child') return
-  
   const child = dragData.value.data
   const area = selectionAreas.value.find(a => a.id === areaId)
-
-  // 检查area是否存在
   if (!area) {
     ElMessage.error('选区不存在')
-    dragOverTarget.value = null
-    dragData.value = null
     return
   }
 
-  // 检查选区是否已满
   const currentCount = getChildrenByArea(areaId).length
   if (currentCount >= area.capacity) {
     ElMessage.warning('该选区人数已满')
-    dragOverTarget.value = null
-    dragData.value = null
     return
   }
 
-  // 添加视觉反馈
   const targetArea = document.querySelector(`[data-area-id="${areaId}"]`)
   if (targetArea) {
     targetArea.classList.add('drop-success')
-    setTimeout(() => {
-      targetArea.classList.remove('drop-success')
-    }, 1000)
+    setTimeout(() => targetArea.classList.remove('drop-success'), 1000)
   }
 
-  // 检查幼儿是否已分配到其他选区
   const existingRecord = assignedChildren.value.find(r => r && r.child_id === child.id)
-  if (existingRecord) {
-    // 更新选区
-    try {
-      await updateSelectionRecord(existingRecord.id, {
-        selection_area_id: areaId
-      })
-      // 更新本地状态
+  try {
+    if (existingRecord) {
+      await updateSelectionRecord(existingRecord.id, { selection_area_id: areaId })
       const index = assignedChildren.value.findIndex(r => r && r.id === existingRecord.id)
-      if (index !== -1) {
-        assignedChildren.value[index].selection_area_id = areaId
-      }
+      if (index !== -1) assignedChildren.value[index].selection_area_id = areaId
       ElMessage.success(`${child.name}已重新分配到${area.name}`)
-    } catch (error) {
-      ElMessage.error('重新分配失败')
-    }
-  } else {
-    // 创建新记录
-    try {
-      const res = await createSelectionRecord({
-        child_id: child.id,
-        selection_area_id: areaId
-      })
+    } else {
+      const res = await createSelectionRecord({ child_id: child.id, selection_area_id: areaId })
       assignedChildren.value.push(res.data)
       ElMessage.success(`${child.name}已分配到${area.name}`)
-    } catch (error) {
-      ElMessage.error('分配失败')
     }
+  } catch (error) {
+    ElMessage.error('分配失败')
   }
-  
-  dragOverTarget.value = null
-  dragData.value = null
 }
 
-// 全屏切换功能
+// ========== 全屏逻辑 ==========
+
 const toggleFullscreen = () => {
-  console.log('切换全屏状态') // 调试日志
-  
-  // 确保始终获取到正确的容器元素
   const container = containerRef.value
-  if (container) {
-    fullscreenElement.value = container
-  } else {
-    ElMessage.error('无法找到容器元素')
-    return
-  }
-  
+  if (!container) return ElMessage.error('无法找到容器元素')
+
   if (!document.fullscreenElement) {
-    // 进入全屏
-    console.log('进入全屏模式') // 调试日志
-    if (fullscreenElement.value.requestFullscreen) {
-      fullscreenElement.value.requestFullscreen()
-    } else if (fullscreenElement.value.mozRequestFullScreen) { // Firefox
-      fullscreenElement.value.mozRequestFullScreen()
-    } else if (fullscreenElement.value.webkitRequestFullscreen) { // Chrome, Safari and Opera
-      fullscreenElement.value.webkitRequestFullscreen()
-    } else if (fullscreenElement.value.msRequestFullscreen) { // IE/Edge
-      fullscreenElement.value.msRequestFullscreen()
-    } else {
-      ElMessage.error('浏览器不支持全屏功能')
-      return
-    }
+    if (container.requestFullscreen) container.requestFullscreen()
+    else if (container.mozRequestFullScreen) container.mozRequestFullScreen()
+    else if (container.webkitRequestFullscreen) container.webkitRequestFullscreen()
+    else if (container.msRequestFullscreen) container.msRequestFullscreen()
+    else return ElMessage.error('浏览器不支持全屏')
     isFullscreen.value = true
   } else {
-    // 退出全屏
-    console.log('退出全屏模式') // 调试日志
-    if (document.exitFullscreen) {
-      document.exitFullscreen()
-    } else if (document.mozCancelFullScreen) { // Firefox
-      document.mozCancelFullScreen()
-    } else if (document.webkitExitFullscreen) { // Chrome, Safari and Opera
-      document.webkitExitFullscreen()
-    } else if (document.msExitFullscreen) { // IE/Edge
-      document.msExitFullscreen()
-    } else {
-      ElMessage.error('无法退出全屏模式')
-      return
-    }
+    if (document.exitFullscreen) document.exitFullscreen()
+    else if (document.mozCancelFullScreen) document.mozCancelFullScreen()
+    else if (document.webkitExitFullscreen) document.webkitExitFullscreen()
+    else if (document.msExitFullscreen) document.msExitFullscreen()
+    else return ElMessage.error('无法退出全屏')
     isFullscreen.value = false
   }
-  
-  // 强制刷新选择器
   selectKey.value += 1
+  updateSelectionAreaWidth()
 }
 
-// 监听全屏变化事件
 const handleFullscreenChange = () => {
-  isFullscreen.value = !!document.fullscreenElement ||
-    !!document.mozFullScreenElement ||
-    !!document.webkitFullscreenElement ||
-    !!document.msFullscreenElement
-    
-  // 全屏状态改变时强制刷新选择器
+  isFullscreen.value = !!(
+    document.fullscreenElement ||
+    document.mozFullScreenElement ||
+    document.webkitFullscreenElement ||
+    document.msFullscreenElement
+  )
   selectKey.value += 1
-  
-  // 在全屏状态改变后重新绑定事件监听器
-  setTimeout(() => {
-    if (containerRef.value) {
-      fullscreenElement.value = containerRef.value
-    }
-    
-    // 强制重新计算下拉框位置
-    const dropdowns = document.querySelectorAll('.el-select-dropdown')
-    dropdowns.forEach(dropdown => {
-      // 如果在全屏模式下，将下拉框附加到特定容器
-      if (isFullscreen.value) {
-        dropdown.style.zIndex = '10002';
-      } else {
-        dropdown.style.position = '';
-        dropdown.style.zIndex = '';
-      }
-    })
-    
-    // 为所有下拉框添加全屏兼容样式
-    const poppers = document.querySelectorAll('.el-popper')
-    poppers.forEach(popper => {
-      popper.style.zIndex = '10003'
-    })
-    
-    // 重新触发班级选择事件
-    if (selectedClassId.value) {
-      handleClassChange()
-    }
-  }, 100)
+  nextTick(() => {
+    if (selectedClassId.value) handleClassChange()
+  })
 }
 
-// 组件挂载时获取数据
-onMounted(() => {
-  console.log('组件挂载') // 调试日志
-  fullscreenElement.value = containerRef.value
-  if (!containerRef.value) {
-    console.error('容器引用未正确设置') // 调试日志
+// 防抖函数
+const debounce = (fn, delay) => {
+  let timer
+  return (...args) => {
+    clearTimeout(timer)
+    timer = setTimeout(() => fn.apply(this, args), delay)
   }
-  
+}
+
+// 窗口大小变化时更新选区宽度
+const handleResize = debounce(() => {
+  if (selectedClassId.value) {
+    updateSelectionAreaWidth()
+  }
+}, 300)
+
+// ========== 生命周期 ==========
+
+onMounted(() => {
+  fullscreenElement.value = containerRef.value
   document.addEventListener('fullscreenchange', handleFullscreenChange)
   document.addEventListener('mozfullscreenchange', handleFullscreenChange)
   document.addEventListener('webkitfullscreenchange', handleFullscreenChange)
   document.addEventListener('msfullscreenchange', handleFullscreenChange)
+  window.addEventListener('resize', handleResize)
   getClassList()
-  
-  // 添加全局样式以确保下拉框在全屏模式下可见
+
+  // 全局样式确保下拉框层级
   const style = document.createElement('style')
-  style.innerHTML = `
-    .el-select-dropdown.fullscreen-compatible-popper {
-      position: fixed !important;
-      z-index: 9999 !important;
-    }
-  `
+  style.innerHTML = `.el-select-dropdown{z-index:9999!important;}`
   document.head.appendChild(style)
 })
 
-// 组件卸载时移除事件监听
 onUnmounted(() => {
-  console.log('组件卸载，移除事件监听') // 调试日志
   document.removeEventListener('fullscreenchange', handleFullscreenChange)
   document.removeEventListener('mozfullscreenchange', handleFullscreenChange)
   document.removeEventListener('webkitfullscreenchange', handleFullscreenChange)
   document.removeEventListener('msfullscreenchange', handleFullscreenChange)
+  window.removeEventListener('resize', handleResize)
 })
-
-// 添加触摸开始事件处理
-const handleTouchStart = (event, type, data) => {
-  // 阻止默认滚动行为
-  event.preventDefault()
-  
-  // 设置拖拽数据
-  dragData.value = { type, data }
-  
-  // 添加触摸状态类
-  event.target.classList.add('dragging')
-  
-  // 添加触摸反馈效果
-  const touchEffect = document.createElement('div')
-  touchEffect.className = 'touch-feedback'
-  touchEffect.style.left = `${event.touches[0].clientX}px`
-  touchEffect.style.top = `${event.touches[0].clientY}px`
-  document.body.appendChild(touchEffect)
-  
-  // 移除触摸反馈效果
-  setTimeout(() => {
-    if (touchEffect.parentNode) {
-      touchEffect.parentNode.removeChild(touchEffect)
-    }
-  }, 300)
-}
-
-// 添加触摸移动事件处理
-const handleTouchMove = (event) => {
-  // 阻止默认滚动行为
-  event.preventDefault()
-  
-  // 创建触摸轨迹点
-  if (event.touches[0]) {
-    createDragTrail(event.touches[0].clientX, event.touches[0].clientY)
-  }
-}
-
-// 添加触摸结束事件处理
-const handleTouchEnd = (event, areaType, areaId = null) => {
-  event.preventDefault()
-  
-  // 移除拖拽状态类
-  const target = event.target
-  if (target) {
-    target.classList.remove('dragging')
-  }
-  
-  // 根据区域类型处理触摸结束事件
-  if (areaType === 'source') {
-    dragOverSource.value = false
-  } else if (areaType === 'target') {
-    dragOverTarget.value = areaId
-    if (areaId && dragData.value) {
-      // 触摸结束时执行放置操作
-      handleDropToArea(areaId)
-    }
-  }
-}
-
-// 添加触摸取消事件处理
-const handleTouchCancel = (event) => {
-  event.preventDefault()
-  
-  // 清理状态
-  dragOverSource.value = false
-  dragOverTarget.value = null
-  dragData.value = null
-  
-  // 移除拖拽状态类
-  const target = event.target
-  if (target) {
-    target.classList.remove('dragging')
-  }
-}
-
 </script>
 
 <style scoped>
@@ -932,50 +813,50 @@ const handleTouchCancel = (event) => {
   opacity: 0.7;
 }
 
-.glowing-orb:nth-child(1) { 
-  width: 40px; 
-  height: 40px; 
-  top: 20%; 
-  left: 15%; 
-  animation-delay: 0s; 
+.glowing-orb:nth-child(1) {
+  width: 40px;
+  height: 40px;
+  top: 20%;
+  left: 15%;
+  animation-delay: 0s;
 }
 
-.glowing-orb:nth-child(2) { 
-  width: 30px; 
-  height: 30px; 
-  top: 70%; 
-  left: 80%; 
-  animation-delay: 2s; 
+.glowing-orb:nth-child(2) {
+  width: 30px;
+  height: 30px;
+  top: 70%;
+  left: 80%;
+  animation-delay: 2s;
   background: radial-gradient(circle, rgba(255, 100, 200, 0.8), transparent 70%);
   box-shadow: 0 0 30px rgba(255, 100, 200, 0.5);
 }
 
-.glowing-orb:nth-child(3) { 
-  width: 50px; 
-  height: 50px; 
-  top: 40%; 
-  left: 50%; 
-  animation-delay: 4s; 
+.glowing-orb:nth-child(3) {
+  width: 50px;
+  height: 50px;
+  top: 40%;
+  left: 50%;
+  animation-delay: 4s;
   background: radial-gradient(circle, rgba(100, 255, 200, 0.8), transparent 70%);
   box-shadow: 0 0 30px rgba(100, 255, 200, 0.5);
 }
 
-.glowing-orb:nth-child(4) { 
-  width: 35px; 
-  height: 35px; 
-  top: 60%; 
-  left: 20%; 
-  animation-delay: 6s; 
+.glowing-orb:nth-child(4) {
+  width: 35px;
+  height: 35px;
+  top: 60%;
+  left: 20%;
+  animation-delay: 6s;
   background: radial-gradient(circle, rgba(200, 100, 255, 0.8), transparent 70%);
   box-shadow: 0 0 30px rgba(200, 100, 255, 0.5);
 }
 
-.glowing-orb:nth-child(5) { 
-  width: 45px; 
-  height: 45px; 
-  top: 30%; 
-  left: 70%; 
-  animation-delay: 8s; 
+.glowing-orb:nth-child(5) {
+  width: 45px;
+  height: 45px;
+  top: 30%;
+  left: 70%;
+  animation-delay: 8s;
   background: radial-gradient(circle, rgba(255, 200, 100, 0.8), transparent 70%);
   box-shadow: 0 0 30px rgba(255, 200, 100, 0.5);
 }
@@ -1236,10 +1117,11 @@ const handleTouchCancel = (event) => {
   overflow-y: hidden;
   align-content: stretch;
   min-height: 0;
+  padding-bottom: 8px; /* 防止滚动条遮挡内容 */
 }
 
 .selection-area {
-  flex: 1 0 auto;
+  flex: 0 0 auto; /* 改为固定尺寸，由JS控制宽度 */
   background: #000;
   border-radius: 12px;
   transition: all 0.3s ease;
@@ -1250,8 +1132,8 @@ const handleTouchCancel = (event) => {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-width: 160px;
   min-height: 160px;
+  /* 宽度由JS动态设置 */
 }
 
 .selection-area.drag-over {
@@ -1306,7 +1188,7 @@ const handleTouchCancel = (event) => {
   height: 60px;
   background: #000;
   border-radius: 50%;
-  box-shadow: 
+  box-shadow:
     0 0 40px #000,
     0 0 80px #000,
     0 0 120px #000;
@@ -1534,22 +1416,12 @@ const handleTouchCancel = (event) => {
   z-index: 9998;
 }
 
-.selection-operation-container:fullscreen .el-select-dropdown {
-  position: absolute !important;
-  z-index: 10002 !important;
-}
-
 .selection-operation-container:-webkit-full-screen {
   padding: 10px;
   background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
   min-height: 100vh;
   position: relative;
   z-index: 9998;
-}
-
-.selection-operation-container:-webkit-full-screen .el-select-dropdown {
-  position: absolute !important;
-  z-index: 10002 !important;
 }
 
 .selection-operation-container:-moz-full-screen {
@@ -1560,22 +1432,12 @@ const handleTouchCancel = (event) => {
   z-index: 9998;
 }
 
-.selection-operation-container:-moz-full-screen .el-select-dropdown {
-  position: absolute !important;
-  z-index: 10002 !important;
-}
-
 .selection-operation-container:-ms-fullscreen {
   padding: 10px;
   background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
   min-height: 100vh;
   position: relative;
   z-index: 9998;
-}
-
-.selection-operation-container:-ms-fullscreen .el-select-dropdown {
-  position: absolute !important;
-  z-index: 10002 !important;
 }
 
 /* 确保班级选择器在全屏模式下可见并位于顶层 */
@@ -1716,13 +1578,11 @@ const handleTouchCancel = (event) => {
     flex: 1 1 calc(12.5% - 10px); /* 每行最多8个 */
     max-width: calc(12.5% - 10px);
   }
-  
+
   .selection-areas {
-    grid-template-columns: repeat(auto-fit, minmax(calc((100% - 90px) / 7), 1fr));
-    grid-auto-rows: 1fr;
     gap: 18px;
   }
-  
+
   .selection-area {
     min-height: 150px;
   }
@@ -1733,13 +1593,11 @@ const handleTouchCancel = (event) => {
     flex: 1 1 calc(14.28% - 10px); /* 每行最多7个 */
     max-width: calc(14.28% - 10px);
   }
-  
+
   .selection-areas {
-    grid-template-columns: repeat(auto-fit, minmax(calc((100% - 80px) / 7), 1fr));
-    grid-auto-rows: 1fr;
     gap: 16px;
   }
-  
+
   .selection-area {
     min-height: 140px;
   }
@@ -1750,13 +1608,11 @@ const handleTouchCancel = (event) => {
     flex: 1 1 calc(16.66% - 10px); /* 每行最多6个 */
     max-width: calc(16.66% - 10px);
   }
-  
+
   .selection-areas {
-    grid-template-columns: repeat(auto-fit, minmax(calc((100% - 70px) / 7), 1fr));
-    grid-auto-rows: 1fr;
     gap: 14px;
   }
-  
+
   .selection-area {
     min-height: 130px;
   }
@@ -1766,13 +1622,11 @@ const handleTouchCancel = (event) => {
   .selection-operation-container {
     padding: 5px;
   }
-  
+
   .selection-areas {
-    grid-template-columns: repeat(auto-fit, minmax(calc((100% - 60px) / 7), 1fr));
-    grid-auto-rows: 1fr;
     gap: 12px;
   }
-  
+
   .selection-area {
     min-height: 120px;
   }
@@ -1783,13 +1637,11 @@ const handleTouchCancel = (event) => {
     flex: 1 1 calc(25% - 10px); /* 每行最多4个 */
     max-width: calc(25% - 10px);
   }
-  
+
   .selection-areas {
-    grid-template-columns: repeat(auto-fit, minmax(calc((100% - 50px) / 7), 1fr));
-    grid-auto-rows: 1fr;
     gap: 10px;
   }
-  
+
   .selection-area {
     min-height: 110px;
   }
@@ -1800,10 +1652,8 @@ const handleTouchCancel = (event) => {
     flex: 1 1 calc(33.33% - 10px); /* 每行最多3个 */
     max-width: calc(33.33% - 10px);
   }
-  
+
   .selection-areas {
-    grid-template-columns: repeat(auto-fit, minmax(calc((100% - 40px) / 7), 1fr));
-    grid-auto-rows: 1fr;
     gap: 8px;
   }
   
