@@ -111,6 +111,7 @@
               class="selection-area"
               :class="{ 'drag-over': dragOverTarget === area.id }"
               :data-area-id="area.id"
+              :id="'selection-area-' + area.id"
               @dragenter.prevent="handleDragEnter('target', area.id)"
               @dragleave.prevent="handleDragLeave('target')"
               @dragover.prevent
@@ -141,6 +142,11 @@
                   }" v-for="i in 25" :key="i">
                     {{ area.name }}
                   </div>
+
+                  <!-- 调试信息显示 -->
+                  <div class="debug-info">
+                    {{ area.name }}<br>Id: {{ area.id }}
+                  </div>
                 </div>
               </div>
             </div>
@@ -148,12 +154,24 @@
         </div>
       </div>
     </el-card>
+
+    <!-- 调试信息面板 -->
+    <div class="debug-panel">
+      <h4>调试信息</h4>
+      <p>当前选区数量: {{ selectionAreas.length }}</p>
+      <p>当前选区ID列表: {{ selectionAreas.map(a => a.id).join(', ') }}</p>
+      <p>触摸拖拽状态: {{ touchDragging }}</p>
+      <p>拖拽数据: {{ dragData ? dragData.data.name : '无' }}</p>
+      <p>触摸位置: {{ touchCurrentPos.x.toFixed(2) }}, {{ touchCurrentPos.y.toFixed(2) }}</p>
+      <p>当前拖拽目标: {{ dragOverTarget || '无' }}</p>
+      <p>触摸区域: {{ lastTouchArea || '无' }}</p>
+    </div>
   </div>
 </template>
 
 <script setup>
-import {ref, reactive, computed, onMounted, onUnmounted, nextTick, watch} from 'vue'
-import {ElMessage} from 'element-plus'
+import { ref, reactive, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
+import { ElMessage } from 'element-plus'
 import {
   getSelectionAreas,
   getSelectionRecords,
@@ -169,7 +187,7 @@ const loading = ref(false)
 const selectedClassId = ref('')
 const selectKey = ref(0)
 const containerRef = ref(null)
-const formModel = reactive({selectedClassId: ''})
+const formModel = reactive({ selectedClassId: '' })
 const classList = ref([])
 const selectionAreas = ref([])
 const allChildren = ref([])
@@ -184,8 +202,8 @@ const dropdownPlaceholder = ref(null)
 // Touch 拖拽状态
 const touchDragging = ref(false)
 const touchDragPreview = ref(null)
-const touchStartPos = ref({x: 0, y: 0})
-const touchCurrentPos = ref({x: 0, y: 0})
+const touchStartPos = ref({ x: 0, y: 0 })
+const touchCurrentPos = ref({ x: 0, y: 0 })
 const touchMoveTimer = ref(null)
 const lastTouchArea = ref(null)
 
@@ -197,8 +215,8 @@ const getRandomStartPosition = (axis) => {
 // 计算未分配幼儿
 const unassignedChildren = computed(() => {
   const assignedIds = assignedChildren.value
-      .filter(item => item && item.child_id)
-      .map(item => item.child_id)
+    .filter(item => item && item.child_id)
+    .map(item => item.child_id)
   return allChildren.value.filter(child => !assignedIds.includes(child.id))
 })
 
@@ -219,7 +237,7 @@ const childAvatarSize = computed(() => {
 // 获取班级列表
 const getClassList = async () => {
   try {
-    const res = await classApi.getClassList({page_size: 100})
+    const res = await classApi.getClassList({ page_size: 100 })
     if (res && res.results) {
       classList.value = Array.isArray(res.results.items) ? res.results.items : res.results
     } else {
@@ -250,8 +268,8 @@ const handleClassChange = async () => {
     const today = new Date().toISOString().split('T')[0]
 
     const [areasRes, childrenRes, recordsRes] = await Promise.all([
-      getSelectionAreas({class_id: selectedClassId.value, page_size: 100}),
-      childApi.getChildrenList({class_id: selectedClassId.value, page_size: 200}),
+      getSelectionAreas({ class_id: selectedClassId.value, page_size: 100 }),
+      childApi.getChildrenList({ class_id: selectedClassId.value, page_size: 200 }),
       getSelectionRecords({
         class_id: selectedClassId.value,
         page_size: 200,
@@ -267,6 +285,10 @@ const handleClassChange = async () => {
 
     // 更新选区宽度
     updateSelectionAreaWidth()
+
+    // 调试信息
+    console.log('获取到的选区列表:', selectionAreas.value)
+    console.log('选区ID列表:', selectionAreas.value.map(a => a.id))
 
   } catch (error) {
     console.error('获取数据失败:', error)
@@ -303,8 +325,8 @@ const updateSelectionAreaWidth = () => {
 // 根据选区ID获取已分配幼儿
 const getChildrenByArea = (areaId) => {
   const assignedChildIds = assignedChildren.value
-      .filter(record => record && record.selection_area_id === areaId)
-      .map(record => record.child_id)
+    .filter(record => record && record.selection_area_id === areaId)
+    .map(record => record.child_id)
   return allChildren.value.filter(child => assignedChildIds.includes(child.id))
 }
 
@@ -364,10 +386,10 @@ const handleTouchStart = (event, type, data) => {
 
   event.preventDefault()
   const child = data
-  dragData.value = {type: 'child', data: child}
+  dragData.value = { type: 'child', data: child }
   touchDragging.value = true
-  touchStartPos.value = {x: event.touches[0].clientX, y: event.touches[0].clientY}
-  touchCurrentPos.value = {...touchStartPos.value}
+  touchStartPos.value = { x: event.touches[0].clientX, y: event.touches[0].clientY }
+  touchCurrentPos.value = { ...touchStartPos.value }
 
   // 创建预览
   touchDragPreview.value = createTouchDragPreview(child)
@@ -386,29 +408,50 @@ const moveDragPreview = (x, y) => {
   createDragTrail(x, y)
 }
 
-// 检测当前触摸位置的选区
+// 检测当前触摸位置的选区 - 修复问题2：扩展检测区域到整个选区
 const detectTouchArea = (x, y) => {
-  // 使用元素检测方法
-  const elements = document.elementsFromPoint(x, y)
-  for (const el of elements) {
-    if (el.classList.contains('unassigned-area')) {
-      return {type: 'source', id: null}
-    }
-    if (el.hasAttribute('data-area-id')) {
-      return {type: 'target', id: el.getAttribute('data-area-id')}
+  console.log(`检测触摸位置: x=${x}, y=${y}`)
+
+  // 1. 首先检查是否在未分配区域
+  const unassignedArea = document.querySelector('.unassigned-area')
+  if (unassignedArea) {
+    const unassignedRect = unassignedArea.getBoundingClientRect()
+    console.log(`未分配区域边界: ${unassignedRect.left}, ${unassignedRect.top}, ${unassignedRect.right}, ${unassignedRect.bottom}`)
+    if (x >= unassignedRect.left && x <= unassignedRect.right &&
+        y >= unassignedRect.top && y <= unassignedRect.bottom) {
+      console.log('检测到未分配区域')
+      return { type: 'source', id: null }
     }
   }
 
-  // 如果没找到，手动遍历所有选区区域（兜底）
+  // 2. 检查所有选区区域 - 修复问题2：使用整个选区容器而非黑洞中心
   const areas = document.querySelectorAll('.selection-area')
+  console.log(`找到 ${areas.length} 个选区元素`)
+
   for (const area of areas) {
     const rect = area.getBoundingClientRect()
+    console.log(`选区 ${area.dataset.areaId} 边界: ${rect.left}, ${rect.top}, ${rect.right}, ${rect.bottom}`)
+
+    // 修复问题2：检测整个选区区域而非黑洞中心
     if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
-      return {type: 'target', id: area.dataset.areaId}
+      const areaId = area.dataset.areaId
+      console.log(`检测到选区 ${areaId}`)
+
+      // 验证选区是否存在于当前列表中 - 修复问题1：类型转换
+      const exists = selectionAreas.value.some(a => parseInt(a.id) === parseInt(areaId))
+      if (exists) {
+        console.log(`选区 ${areaId} 存在于当前列表中`)
+        return { type: 'target', id: areaId }
+      } else {
+        console.log(`选区 ${areaId} 不存在于当前列表中`)
+        return { type: 'target', id: areaId }
+      }
     }
   }
 
-  return {type: null, id: null}
+  // 3. 如果没有找到匹配区域，返回null
+  console.log('未检测到任何区域')
+  return { type: null, id: null }
 }
 
 const handleTouchMove = (event) => {
@@ -417,7 +460,7 @@ const handleTouchMove = (event) => {
 
   const x = event.touches[0].clientX
   const y = event.touches[0].clientY
-  touchCurrentPos.value = {x, y}
+  touchCurrentPos.value = { x, y }
 
   moveDragPreview(x, y)
 
@@ -460,10 +503,44 @@ const handleTouchEnd = async (event) => {
     const y = event.changedTouches[0].clientY
     const areaInfo = detectTouchArea(x, y)
 
+    console.log('触摸结束，检测到区域:', areaInfo)
+
     if (areaInfo.type === 'source') {
       await handleDropToSource()
     } else if (areaInfo.type === 'target' && areaInfo.id) {
-      await handleDropToArea(areaInfo.id)
+      // 验证选区存在性 - 修复类型转换问题
+      console.log('验证选区是否存在，当前选区列表:', selectionAreas.value.map(a => a.id))
+      console.log('目标选区ID:', areaInfo.id)
+
+      const targetAreaId = parseInt(areaInfo.id)
+      const targetArea = selectionAreas.value.find(a => parseInt(a.id) === targetAreaId)
+
+      if (targetArea) {
+        console.log(`验证选区 ${targetAreaId} 存在，执行分配`)
+        await handleDropToArea(targetAreaId)
+      } else {
+        console.log(`验证选区 ${targetAreaId} 不存在`)
+        showFullscreenMessage('error', '选区不存在')
+      }
+    } else {
+      // 检查是否有选区被检测到但不存在
+      const allAreas = document.querySelectorAll('.selection-area')
+      let foundArea = false
+      for (const area of allAreas) {
+        const rect = area.getBoundingClientRect()
+        if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
+          foundArea = true
+          break
+        }
+      }
+
+      if (foundArea) {
+        console.log('检测到选区但验证失败')
+        showFullscreenMessage('error', '选区不存在')
+      } else {
+        console.log('未检测到任何有效区域')
+        showFullscreenMessage('warning', '请将幼儿拖拽到有效选区')
+      }
     }
   } finally {
     cleanupTouchDrag()
@@ -471,13 +548,14 @@ const handleTouchEnd = async (event) => {
 }
 
 const handleTouchCancel = () => {
+  console.log('触摸取消')
   cleanupTouchDrag()
 }
 
 // ========== 原有鼠标拖拽逻辑（保留用于桌面端） ==========
 
 const handleDragStart = (event, type, data) => {
-  dragData.value = {type, data}
+  dragData.value = { type, data }
   event.dataTransfer.effectAllowed = 'move'
   event.target.classList.add('dragging')
 
@@ -490,7 +568,7 @@ const handleDragStart = (event, type, data) => {
   event.dataTransfer.setDragImage(dragImage, 0, 0)
   setTimeout(() => document.body.removeChild(dragImage), 0)
 
-  // 创建拖拽轨迹效果
+  // 创建拖拽轨迹效果 - 修复问题3：全屏下彩虹跟随效果
   createDragTrail(event.clientX, event.clientY)
 }
 
@@ -529,20 +607,26 @@ const handleDropToArea = async (areaId) => {
   if (!dragData.value || dragData.value.type !== 'child') return
   const child = dragData.value.data
 
-  // 验证选区是否存在
-  const currentArea = selectionAreas.value.find(a => a.id === areaId)
+  // 验证选区是否存在 - 修复类型转换问题
+  console.log('分配前验证选区是否存在，当前选区列表:', selectionAreas.value.map(a => a.id))
+  console.log('分配目标选区ID:', areaId)
+
+  const targetAreaId = parseInt(areaId)
+  const currentArea = selectionAreas.value.find(a => parseInt(a.id) === targetAreaId)
+
   if (!currentArea) {
+    console.log(`选区 ${targetAreaId} 不存在于当前列表中`)
     showFullscreenMessage('error', '选区不存在')
     return
   }
 
-  const currentCount = getChildrenByArea(areaId).length
+  const currentCount = getChildrenByArea(targetAreaId).length
   if (currentCount >= currentArea.capacity) {
     showFullscreenMessage('warning', '该选区人数已满')
     return
   }
 
-  const targetArea = document.querySelector(`[data-area-id="${areaId}"]`)
+  const targetArea = document.querySelector(`[data-area-id="${targetAreaId}"]`)
   if (targetArea) {
     targetArea.classList.add('drop-success')
     setTimeout(() => targetArea.classList.remove('drop-success'), 1000)
@@ -551,12 +635,12 @@ const handleDropToArea = async (areaId) => {
   const existingRecord = assignedChildren.value.find(r => r && r.child_id === child.id)
   try {
     if (existingRecord) {
-      await updateSelectionRecord(existingRecord.id, {selection_area_id: areaId})
+      await updateSelectionRecord(existingRecord.id, { selection_area_id: targetAreaId })
       const index = assignedChildren.value.findIndex(r => r && r.id === existingRecord.id)
-      if (index !== -1) assignedChildren.value[index].selection_area_id = areaId
+      if (index !== -1) assignedChildren.value[index].selection_area_id = targetAreaId
       showFullscreenMessage('success', `${child.name}已重新分配到${currentArea.name}`)
     } else {
-      const res = await createSelectionRecord({child_id: child.id, selection_area_id: areaId})
+      const res = await createSelectionRecord({ child_id: child.id, selection_area_id: targetAreaId })
       assignedChildren.value.push(res.data)
       showFullscreenMessage('success', `${child.name}已分配到${currentArea.name}`)
     }
@@ -593,10 +677,10 @@ const toggleFullscreen = () => {
 
 const handleFullscreenChange = () => {
   isFullscreen.value = !!(
-      document.fullscreenElement ||
-      document.mozFullScreenElement ||
-      document.webkitExitFullscreenElement ||
-      document.msFullscreenElement
+    document.fullscreenElement ||
+    document.mozFullScreenElement ||
+    document.webkitExitFullscreenElement ||
+    document.msFullscreenElement
   )
   selectKey.value += 1
 
@@ -700,6 +784,11 @@ onMounted(() => {
     .el-select-dropdown{z-index:9999!important;}
     .el-message{z-index:999999!important;}
     .el-message-box{z-index:999999!important;}
+    /* 修复问题3：全屏下彩虹跟随效果 */
+    .drag-trail {
+      position: fixed !important;
+      z-index: 999999 !important;
+    }
   `
   document.head.appendChild(style)
 })
@@ -889,305 +978,56 @@ onUnmounted(() => {
 }
 
 /* 为每个粒子设置不同的初始位置和动画延迟 */
-.floating-particle:nth-child(1) {
-  top: 10%;
-  left: 10%;
-  animation-delay: 0s;
-}
-
-.floating-particle:nth-child(2) {
-  top: 20%;
-  left: 80%;
-  animation-delay: 1s;
-}
-
-.floating-particle:nth-child(3) {
-  top: 30%;
-  left: 30%;
-  animation-delay: 2s;
-}
-
-.floating-particle:nth-child(4) {
-  top: 40%;
-  left: 70%;
-  animation-delay: 3s;
-}
-
-.floating-particle:nth-child(5) {
-  top: 50%;
-  left: 20%;
-  animation-delay: 4s;
-}
-
-.floating-particle:nth-child(6) {
-  top: 60%;
-  left: 60%;
-  animation-delay: 5s;
-}
-
-.floating-particle:nth-child(7) {
-  top: 70%;
-  left: 40%;
-  animation-delay: 6s;
-}
-
-.floating-particle:nth-child(8) {
-  top: 80%;
-  left: 80%;
-  animation-delay: 7s;
-}
-
-.floating-particle:nth-child(9) {
-  top: 15%;
-  left: 50%;
-  animation-delay: 0.5s;
-}
-
-.floating-particle:nth-child(10) {
-  top: 25%;
-  left: 25%;
-  animation-delay: 1.5s;
-}
-
-.floating-particle:nth-child(11) {
-  top: 35%;
-  left: 65%;
-  animation-delay: 2.5s;
-}
-
-.floating-particle:nth-child(12) {
-  top: 45%;
-  left: 15%;
-  animation-delay: 3.5s;
-}
-
-.floating-particle:nth-child(13) {
-  top: 55%;
-  left: 55%;
-  animation-delay: 4.5s;
-}
-
-.floating-particle:nth-child(14) {
-  top: 65%;
-  left: 35%;
-  animation-delay: 5.5s;
-}
-
-.floating-particle:nth-child(15) {
-  top: 75%;
-  left: 75%;
-  animation-delay: 6.5s;
-}
-
-.floating-particle:nth-child(16) {
-  top: 85%;
-  left: 45%;
-  animation-delay: 7.5s;
-}
-
-.floating-particle:nth-child(17) {
-  top: 12%;
-  left: 90%;
-  animation-delay: 0.8s;
-}
-
-.floating-particle:nth-child(18) {
-  top: 22%;
-  left: 10%;
-  animation-delay: 1.8s;
-}
-
-.floating-particle:nth-child(19) {
-  top: 32%;
-  left: 80%;
-  animation-delay: 2.8s;
-}
-
-.floating-particle:nth-child(20) {
-  top: 42%;
-  left: 20%;
-  animation-delay: 3.8s;
-}
-
-.floating-particle:nth-child(21) {
-  top: 52%;
-  left: 60%;
-  animation-delay: 4.8s;
-}
-
-.floating-particle:nth-child(22) {
-  top: 62%;
-  left: 30%;
-  animation-delay: 5.8s;
-}
-
-.floating-particle:nth-child(23) {
-  top: 72%;
-  left: 70%;
-  animation-delay: 6.8s;
-}
-
-.floating-particle:nth-child(24) {
-  top: 82%;
-  left: 40%;
-  animation-delay: 7.8s;
-}
-
-.floating-particle:nth-child(25) {
-  top: 18%;
-  left: 15%;
-  animation-delay: 0.3s;
-}
-
-.floating-particle:nth-child(26) {
-  top: 28%;
-  left: 85%;
-  animation-delay: 1.3s;
-}
-
-.floating-particle:nth-child(27) {
-  top: 38%;
-  left: 35%;
-  animation-delay: 2.3s;
-}
-
-.floating-particle:nth-child(28) {
-  top: 48%;
-  left: 65%;
-  animation-delay: 3.3s;
-}
-
-.floating-particle:nth-child(29) {
-  top: 58%;
-  left: 25%;
-  animation-delay: 4.3s;
-}
-
-.floating-particle:nth-child(30) {
-  top: 68%;
-  left: 75%;
-  animation-delay: 5.3s;
-}
-
-.floating-particle:nth-child(31) {
-  top: 5%;
-  left: 40%;
-  animation-delay: 0.2s;
-}
-
-.floating-particle:nth-child(32) {
-  top: 15%;
-  left: 70%;
-  animation-delay: 1.2s;
-}
-
-.floating-particle:nth-child(33) {
-  top: 25%;
-  left: 10%;
-  animation-delay: 2.2s;
-}
-
-.floating-particle:nth-child(34) {
-  top: 35%;
-  left: 80%;
-  animation-delay: 3.3s;
-}
-
-.floating-particle:nth-child(35) {
-  top: 45%;
-  left: 30%;
-  animation-delay: 4.2s;
-}
-
-.floating-particle:nth-child(36) {
-  top: 55%;
-  left: 60%;
-  animation-delay: 5.2s;
-}
-
-.floating-particle:nth-child(37) {
-  top: 65%;
-  left: 20%;
-  animation-delay: 6.2s;
-}
-
-.floating-particle:nth-child(38) {
-  top: 75%;
-  left: 90%;
-  animation-delay: 7.2s;
-}
-
-.floating-particle:nth-child(39) {
-  top: 85%;
-  left: 50%;
-  animation-delay: 0.7s;
-}
-
-.floating-particle:nth-child(40) {
-  top: 95%;
-  left: 25%;
-  animation-delay: 1.7s;
-}
-
-.floating-particle:nth-child(41) {
-  top: 8%;
-  left: 65%;
-  animation-delay: 2.7s;
-}
-
-.floating-particle:nth-child(42) {
-  top: 18%;
-  left: 15%;
-  animation-delay: 3.7s;
-}
-
-.floating-particle:nth-child(43) {
-  top: 28%;
-  left: 75%;
-  animation-delay: 4.7s;
-}
-
-.floating-particle:nth-child(44) {
-  top: 38%;
-  left: 35%;
-  animation-delay: 5.7s;
-}
-
-.floating-particle:nth-child(45) {
-  top: 48%;
-  left: 85%;
-  animation-delay: 6.7s;
-}
-
-.floating-particle:nth-child(46) {
-  top: 58%;
-  left: 45%;
-  animation-delay: 7.7s;
-}
-
-.floating-particle:nth-child(47) {
-  top: 68%;
-  left: 5%;
-  animation-delay: 0.9s;
-}
-
-.floating-particle:nth-child(48) {
-  top: 78%;
-  left: 55%;
-  animation-delay: 1.9s;
-}
-
-.floating-particle:nth-child(49) {
-  top: 88%;
-  left: 95%;
-  animation-delay: 2.9s;
-}
-
-.floating-particle:nth-child(50) {
-  top: 3%;
-  left: 30%;
-  animation-delay: 3.9s;
-}
+.floating-particle:nth-child(1) { top: 10%; left: 10%; animation-delay: 0s; }
+.floating-particle:nth-child(2) { top: 20%; left: 80%; animation-delay: 1s; }
+.floating-particle:nth-child(3) { top: 30%; left: 30%; animation-delay: 2s; }
+.floating-particle:nth-child(4) { top: 40%; left: 70%; animation-delay: 3s; }
+.floating-particle:nth-child(5) { top: 50%; left: 20%; animation-delay: 4s; }
+.floating-particle:nth-child(6) { top: 60%; left: 60%; animation-delay: 5s; }
+.floating-particle:nth-child(7) { top: 70%; left: 40%; animation-delay: 6s; }
+.floating-particle:nth-child(8) { top: 80%; left: 80%; animation-delay: 7s; }
+.floating-particle:nth-child(9) { top: 15%; left: 50%; animation-delay: 0.5s; }
+.floating-particle:nth-child(10) { top: 25%; left: 25%; animation-delay: 1.5s; }
+.floating-particle:nth-child(11) { top: 35%; left: 65%; animation-delay: 2.5s; }
+.floating-particle:nth-child(12) { top: 45%; left: 15%; animation-delay: 3.5s; }
+.floating-particle:nth-child(13) { top: 55%; left: 55%; animation-delay: 4.5s; }
+.floating-particle:nth-child(14) { top: 65%; left: 35%; animation-delay: 5.5s; }
+.floating-particle:nth-child(15) { top: 75%; left: 75%; animation-delay: 6.5s; }
+.floating-particle:nth-child(16) { top: 85%; left: 45%; animation-delay: 7.5s; }
+.floating-particle:nth-child(17) { top: 12%; left: 90%; animation-delay: 0.8s; }
+.floating-particle:nth-child(18) { top: 22%; left: 10%; animation-delay: 1.8s; }
+.floating-particle:nth-child(19) { top: 32%; left: 80%; animation-delay: 2.8s; }
+.floating-particle:nth-child(20) { top: 42%; left: 20%; animation-delay: 3.8s; }
+.floating-particle:nth-child(21) { top: 52%; left: 60%; animation-delay: 4.8s; }
+.floating-particle:nth-child(22) { top: 62%; left: 30%; animation-delay: 5.8s; }
+.floating-particle:nth-child(23) { top: 72%; left: 70%; animation-delay: 6.8s; }
+.floating-particle:nth-child(24) { top: 82%; left: 40%; animation-delay: 7.8s; }
+.floating-particle:nth-child(25) { top: 18%; left: 15%; animation-delay: 0.3s; }
+.floating-particle:nth-child(26) { top: 28%; left: 85%; animation-delay: 1.3s; }
+.floating-particle:nth-child(27) { top: 38%; left: 35%; animation-delay: 2.3s; }
+.floating-particle:nth-child(28) { top: 48%; left: 65%; animation-delay: 3.3s; }
+.floating-particle:nth-child(29) { top: 58%; left: 25%; animation-delay: 4.3s; }
+.floating-particle:nth-child(30) { top: 68%; left: 75%; animation-delay: 5.3s; }
+.floating-particle:nth-child(31) { top: 5%; left: 40%; animation-delay: 0.2s; }
+.floating-particle:nth-child(32) { top: 15%; left: 70%; animation-delay: 1.2s; }
+.floating-particle:nth-child(33) { top: 25%; left: 10%; animation-delay: 2.2s; }
+.floating-particle:nth-child(34) { top: 35%; left: 80%; animation-delay: 3.3s; }
+.floating-particle:nth-child(35) { top: 45%; left: 30%; animation-delay: 4.2s; }
+.floating-particle:nth-child(36) { top: 55%; left: 60%; animation-delay: 5.2s; }
+.floating-particle:nth-child(37) { top: 65%; left: 20%; animation-delay: 6.2s; }
+.floating-particle:nth-child(38) { top: 75%; left: 90%; animation-delay: 7.2s; }
+.floating-particle:nth-child(39) { top: 85%; left: 50%; animation-delay: 0.7s; }
+.floating-particle:nth-child(40) { top: 95%; left: 25%; animation-delay: 1.7s; }
+.floating-particle:nth-child(41) { top: 8%; left: 65%; animation-delay: 2.7s; }
+.floating-particle:nth-child(42) { top: 18%; left: 15%; animation-delay: 3.7s; }
+.floating-particle:nth-child(43) { top: 28%; left: 75%; animation-delay: 4.7s; }
+.floating-particle:nth-child(44) { top: 38%; left: 35%; animation-delay: 5.7s; }
+.floating-particle:nth-child(45) { top: 48%; left: 85%; animation-delay: 6.7s; }
+.floating-particle:nth-child(46) { top: 58%; left: 45%; animation-delay: 7.7s; }
+.floating-particle:nth-child(47) { top: 68%; left: 5%; animation-delay: 0.9s; }
+.floating-particle:nth-child(48) { top: 78%; left: 55%; animation-delay: 1.9s; }
+.floating-particle:nth-child(49) { top: 88%; left: 95%; animation-delay: 2.9s; }
+.floating-particle:nth-child(50) { top: 3%; left: 30%; animation-delay: 3.9s; }
 
 /* 发光球体 */
 .glowing-orb {
@@ -1292,11 +1132,11 @@ onUnmounted(() => {
   position: absolute;
   border-radius: 50%;
   background: radial-gradient(
-      ellipse at center,
-      rgba(120, 100, 255, 0.3) 0%,
-      rgba(80, 60, 200, 0.2) 40%,
-      rgba(40, 30, 100, 0.1) 70%,
-      transparent 100%
+    ellipse at center,
+    rgba(120, 100, 255, 0.3) 0%,
+    rgba(80, 60, 200, 0.2) 40%,
+    rgba(40, 30, 100, 0.1) 70%,
+    transparent 100%
   );
   filter: blur(20px);
   animation: nebulaFloat 25s infinite linear;
@@ -1317,11 +1157,11 @@ onUnmounted(() => {
   height: 200px;
   animation-delay: 5s;
   background: radial-gradient(
-      ellipse at center,
-      rgba(255, 100, 150, 0.3) 0%,
-      rgba(200, 60, 100, 0.2) 40%,
-      rgba(100, 30, 50, 0.1) 70%,
-      transparent 100%
+    ellipse at center,
+    rgba(255, 100, 150, 0.3) 0%,
+    rgba(200, 60, 100, 0.2) 40%,
+    rgba(100, 30, 50, 0.1) 70%,
+    transparent 100%
   );
 }
 
@@ -1410,16 +1250,18 @@ onUnmounted(() => {
   }
 }
 
-/* 拖拽轨迹效果 */
+/* 拖拽轨迹效果 - 修复问题3：全屏下彩虹跟随效果 */
 .drag-trail {
-  position: absolute;
+  position: fixed;
+  pointer-events: none;
+  z-index: 9998;
   width: 20px;
   height: 20px;
   border-radius: 50%;
   background: radial-gradient(circle, rgba(100, 200, 255, 0.8), transparent 70%);
-  pointer-events: none;
-  z-index: 9998;
   animation: trailFade 0.5s forwards;
+  /* 修复问题3：确保在全屏模式下也可见 */
+  z-index: 999999 !important;
 }
 
 @keyframes trailFade {
@@ -1520,6 +1362,8 @@ onUnmounted(() => {
   justify-content: center;
   min-height: 160px;
   /* 宽度由JS动态设置 */
+  /* 修复问题2：增加选区检测区域 */
+  cursor: pointer;
 }
 
 .selection-area.drag-over {
@@ -1574,9 +1418,10 @@ onUnmounted(() => {
   height: 60px;
   background: #000;
   border-radius: 50%;
-  box-shadow: 0 0 40px #000,
-  0 0 80px #000,
-  0 0 120px #000;
+  box-shadow:
+    0 0 40px #000,
+    0 0 80px #000,
+    0 0 120px #000;
   z-index: 10;
   animation: blackHolePulse 3s infinite alternate;
 }
@@ -1617,12 +1462,12 @@ onUnmounted(() => {
   height: 200px;
   border-radius: 50%;
   background: conic-gradient(
-      from 0deg,
-      rgba(255, 255, 255, 0.1),
-      rgba(255, 255, 255, 0.2),
-      rgba(255, 255, 255, 0.3),
-      rgba(255, 255, 255, 0.2),
-      rgba(255, 255, 255, 0.1)
+    from 0deg,
+    rgba(255, 255, 255, 0.1),
+    rgba(255, 255, 255, 0.2),
+    rgba(255, 255, 255, 0.3),
+    rgba(255, 255, 255, 0.2),
+    rgba(255, 255, 255, 0.1)
   );
   animation: rotateDisk 20s linear infinite;
   opacity: 0.5;
@@ -1666,53 +1511,18 @@ onUnmounted(() => {
 }
 
 /* 为每个粒子设置不同的轨道 */
-.black-hole-particle:nth-child(1) {
-  animation-delay: 0s;
-}
-
-.black-hole-particle:nth-child(2) {
-  animation-delay: 0.4s;
-}
-
-.black-hole-particle:nth-child(3) {
-  animation-delay: 0.8s;
-}
-
-.black-hole-particle:nth-child(4) {
-  animation-delay: 1.2s;
-}
-
-.black-hole-particle:nth-child(5) {
-  animation-delay: 1.6s;
-}
-
-.black-hole-particle:nth-child(6) {
-  animation-delay: 2s;
-}
-
-.black-hole-particle:nth-child(7) {
-  animation-delay: 2.4s;
-}
-
-.black-hole-particle:nth-child(8) {
-  animation-delay: 2.8s;
-}
-
-.black-hole-particle:nth-child(9) {
-  animation-delay: 3.2s;
-}
-
-.black-hole-particle:nth-child(10) {
-  animation-delay: 3.6s;
-}
-
-.black-hole-particle:nth-child(11) {
-  animation-delay: 4s;
-}
-
-.black-hole-particle:nth-child(12) {
-  animation-delay: 4.4s;
-}
+.black-hole-particle:nth-child(1) { animation-delay: 0s; }
+.black-hole-particle:nth-child(2) { animation-delay: 0.4s; }
+.black-hole-particle:nth-child(3) { animation-delay: 0.8s; }
+.black-hole-particle:nth-child(4) { animation-delay: 1.2s; }
+.black-hole-particle:nth-child(5) { animation-delay: 1.6s; }
+.black-hole-particle:nth-child(6) { animation-delay: 2s; }
+.black-hole-particle:nth-child(7) { animation-delay: 2.4s; }
+.black-hole-particle:nth-child(8) { animation-delay: 2.8s; }
+.black-hole-particle:nth-child(9) { animation-delay: 3.2s; }
+.black-hole-particle:nth-child(10) { animation-delay: 3.6s; }
+.black-hole-particle:nth-child(11) { animation-delay: 4s; }
+.black-hole-particle:nth-child(12) { animation-delay: 4.4s; }
 
 /* 吸入的选区名称 */
 .area-name-infalling {
@@ -1725,6 +1535,21 @@ onUnmounted(() => {
   z-index: 5;
   pointer-events: none;
   font-size: 16px;
+}
+
+/* 调试信息显示 */
+.debug-info {
+  position: absolute;
+  top: 5px;
+  left: 5px;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 12px;
+  text-align: center;
+  z-index: 15;
+  background: rgba(0, 0, 0, 0.5);
+  padding: 5px;
+  border-radius: 5px;
+  pointer-events: none;
 }
 
 /* 动画定义 */
@@ -1860,7 +1685,7 @@ onUnmounted(() => {
   z-index: 9998;
 }
 
-/* 确保班级选择器在全屏模式下可见并位于顶层 */
+/* 确保班级选择器在全屏模式下可见 */
 .class-selector-wrapper {
   position: relative;
   z-index: 10000;
@@ -1908,7 +1733,6 @@ onUnmounted(() => {
   background-color: #e6f7ff !important;
   font-weight: bold;
 }
-
 .el-select-dropdown {
   z-index: 9999 !important;
   max-height: 300px !important;
@@ -1916,7 +1740,7 @@ onUnmounted(() => {
   overflow-x: hidden !important;
 }
 
-/* 确保下拉框出现在正确位置 */
+/* 确保下拉框在正确位置 */
 .el-popper[x-placement^="bottom-start"] {
   margin-top: 5px !important;
   will-change: transform;
@@ -2172,7 +1996,6 @@ onUnmounted(() => {
     width: 32px !important;
     height: 32px !important;
   }
-
   .child-name {
     font-size: 12px;
   }
@@ -2183,7 +2006,6 @@ onUnmounted(() => {
     width: 40px !important;
     height: 40px !important;
   }
-
   .child-name {
     font-size: 14px;
   }
@@ -2194,7 +2016,6 @@ onUnmounted(() => {
     width: 44px !important;
     height: 44px !important;
   }
-
   .child-name {
     font-size: 16px;
   }
@@ -2205,9 +2026,42 @@ onUnmounted(() => {
     width: 48px !important;
     height: 48px !important;
   }
-
   .child-name {
     font-size: 18px;
   }
+}
+
+/* 调试面板样式 */
+.debug-panel {
+  position: fixed;
+  bottom: 10px;
+  right: 10px;
+  background: rgba(0, 0, 0, 0.8);
+  color: #fff;
+  padding: 10px;
+  border-radius: 8px;
+  z-index: 1000000;
+  font-size: 12px;
+  max-width: 300px;
+  max-height: 200px;
+  overflow-y: auto;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+}
+
+.debug-panel h4 {
+  margin: 0 0 8px 0;
+  color: #00ffcc;
+  border-bottom: 1px solid #444;
+  padding-bottom: 4px;
+}
+
+.debug-panel p {
+  margin: 4px 0;
+  line-height: 1.4;
+}
+
+/* 在全屏模式下隐藏调试面板 */
+.selection-operation-container:fullscreen .debug-panel {
+  display: none;
 }
 </style>
