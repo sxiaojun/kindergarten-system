@@ -187,6 +187,7 @@ const dropdownPlaceholder = ref(null)
 const touchDragging = ref(false)
 const touchDragPreview = ref(null)
 const currentTouchTarget = ref(null)
+const dragTrail = ref([])
 
 // 获取随机起始位置（用于黑洞文字动画）
 const getRandomStartPosition = (axis) => {
@@ -237,19 +238,19 @@ const handleClassChange = async () => {
   try {
     // 获取今天的日期，格式为 YYYY-MM-DD
     const today = new Date().toISOString().split('T')[0]
-    
+
     const [areasRes, childrenRes, recordsRes] = await Promise.all([
       getSelectionAreas({ class_id: selectedClassId.value, page_size: 100 }),
       childApi.getChildrenList({ class_id: selectedClassId.value, page_size: 200 }),
-      getSelectionRecords({ 
-        class_id: selectedClassId.value, 
+      getSelectionRecords({
+        class_id: selectedClassId.value,
         page_size: 200,
         date_from: today,
         date_to: today,
         is_active: true
       })
     ])
-    
+
 
     selectionAreas.value = areasRes.results?.items || areasRes.results || areasRes.data?.results || areasRes.items || areasRes || []
     allChildren.value = childrenRes.results?.items || childrenRes.results || childrenRes.data?.results || childrenRes.items || childrenRes || []
@@ -298,6 +299,32 @@ const getChildrenByArea = (areaId) => {
   return allChildren.value.filter(child => assignedChildIds.includes(child.id))
 }
 
+// 创建拖拽轨迹效果
+const createDragTrail = (x, y) => {
+  const trail = document.createElement('div')
+  trail.className = 'drag-trail'
+  trail.style.left = `${x}px`
+  trail.style.top = `${y}px`
+  trail.style.position = 'fixed'
+  trail.style.pointerEvents = 'none'
+  trail.style.zIndex = '9998'
+  trail.style.width = '20px'
+  trail.style.height = '20px'
+  trail.style.borderRadius = '50%'
+  trail.style.background = 'radial-gradient(circle, rgba(100, 200, 255, 0.8), transparent 70%)'
+  trail.style.animation = 'trailFade 0.5s forwards'
+  document.body.appendChild(trail)
+
+  // 0.5秒后移除轨迹元素
+  setTimeout(() => {
+    if (trail.parentNode) {
+      trail.parentNode.removeChild(trail)
+    }
+  }, 500)
+
+  return trail
+}
+
 // ========== 触摸拖拽核心逻辑 ==========
 
 const createTouchDragPreview = (child) => {
@@ -344,6 +371,9 @@ const moveDragPreview = (x, y) => {
     touchDragPreview.value.style.left = `${x + 10}px`
     touchDragPreview.value.style.top = `${y + 10}px`
   }
+
+  // 创建拖拽轨迹效果
+  createDragTrail(x, y)
 }
 
 const handleTouchMove = (event) => {
@@ -444,6 +474,13 @@ const handleDragStart = (event, type, data) => {
 const handleDragEnd = () => {
   dragOverSource.value = false
   dragOverTarget.value = null
+  // 清除拖拽轨迹
+  dragTrail.value.forEach(trail => {
+    if (trail.parentNode) {
+      trail.parentNode.removeChild(trail)
+    }
+  })
+  dragTrail.value = []
 }
 
 const handleDragEnter = (areaType, areaId = null) => {
