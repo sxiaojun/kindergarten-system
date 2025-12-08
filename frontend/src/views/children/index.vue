@@ -17,6 +17,10 @@
               <el-icon><Plus /></el-icon>
               新增幼儿
             </el-button>
+            <el-button type="danger" @click="handleBatchDelete" :disabled="multipleSelection.length === 0">
+              <el-icon><Delete /></el-icon>
+              批量删除
+            </el-button>
           </div>
         </div>
       </template>
@@ -53,7 +57,9 @@
         :data="childrenList"
         border
         style="width: 100%"
+        @selection-change="handleSelectionChange"
       >
+        <el-table-column type="selection" width="55" />
         <el-table-column prop="student_id" label="学号" width="120" />
         <el-table-column prop="name" label="幼儿姓名" />
         <el-table-column prop="gender" label="性别" width="80">
@@ -294,6 +300,8 @@ export default {
     const avatarUploadRef = ref() // 添加这一行
     const childrenList = ref([])
     const classList = ref([])
+    // 批量删除相关状态
+    const multipleSelection = ref([])
     
     // 搜索表单
     const searchForm = reactive({
@@ -535,6 +543,44 @@ export default {
         }
       }
     }
+    // 处理多选
+    const handleSelectionChange = (selection) => {
+      multipleSelection.value = selection
+    }
+
+    // 批量删除
+    const handleBatchDelete = async () => {
+      if (multipleSelection.value.length === 0) {
+        ElMessage.warning('请至少选择一个幼儿')
+        return
+      }
+
+      try {
+        await ElMessageBox.confirm(
+          `确定要删除选中的 ${multipleSelection.value.length} 个幼儿吗？`,
+          '提示',
+          {
+            confirmButtonText: '确定',
+            cancelButtonText: '取消',
+            type: 'warning'
+          }
+        )
+
+        // 执行批量删除
+        const deletePromises = multipleSelection.value.map(item =>
+          deleteChild(item.id)
+        )
+
+        await Promise.all(deletePromises)
+        ElMessage.success('删除成功')
+        loadChildrenList() // 重新加载列表
+      } catch (error) {
+        if (error !== 'cancel') {
+          ElMessage.error('删除失败: ' + (error.message || error))
+        }
+      }
+    }
+
     
     // 重置表单
     const resetForm = () => {
@@ -763,7 +809,10 @@ export default {
       handleAvatarSuccess,
       beforeAvatarUpload,
       handleAvatarChange, // 添加这一行
-      viewGrowthRecords
+      viewGrowthRecords,
+      handleSelectionChange,
+      handleBatchDelete,
+      multipleSelection
     }
   }
 }

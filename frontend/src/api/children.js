@@ -108,6 +108,19 @@ export const deleteChild = (id) => {
     method: 'delete'
   })
 }
+/**
+ * 批量删除幼儿
+ * @param {Array<number>} ids - 幼儿ID数组
+ * @returns {Promise} - 返回删除结果
+ */
+export const batchDeleteChildren = (ids) => {
+  return request({
+    url: 'children/batch_delete/',
+    method: 'post',
+    data: { ids }
+  })
+}
+
 
 /**
  * 切换幼儿状态
