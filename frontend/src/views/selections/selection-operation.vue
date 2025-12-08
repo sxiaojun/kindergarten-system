@@ -338,7 +338,7 @@ const createDragTrail = (x, y) => {
   trail.style.top = `${y}px`
   trail.style.position = 'fixed'
   trail.style.pointerEvents = 'none'
-  trail.style.zIndex = '9998'
+  trail.style.zIndex = '1000000'
   trail.style.width = '20px'
   trail.style.height = '20px'
   trail.style.borderRadius = '50%'
@@ -802,7 +802,7 @@ onMounted(() => {
     /* 修复问题3：全屏下彩虹跟随效果 */
     .drag-trail {
       position: fixed !important;
-      z-index: 999999 !important;
+      z-index: 1000000 !important;
     }
   `
   document.head.appendChild(style)
@@ -1518,14 +1518,14 @@ onUnmounted(() => {
 .drag-trail {
   position: fixed;
   pointer-events: none;
-  z-index: 9998;
+  z-index: 1000000;
   width: 20px;
   height: 20px;
   border-radius: 50%;
   background: radial-gradient(circle, rgba(100, 200, 255, 0.8), transparent 70%);
   animation: trailFade 0.5s forwards;
-  /* 修复问题3：确保在全屏模式下也可见 */
-  z-index: 999999 !important;
+  /* 修复问题3：确保在全屏模式下也可见
+  z-index: 1000000 !important;*/
 }
 
 @keyframes trailFade {
