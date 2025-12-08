@@ -377,10 +377,10 @@ export default {
         { required: true, message: '请选择班级', trigger: 'change' }
       ],
       parent_name: [
-        { required: true, message: '请输入家长姓名', trigger: 'blur' }
+        { message: '请输入家长姓名', trigger: 'blur' }
       ],
       parent_phone: [
-        { required: true, message: '请输入联系电话', trigger: 'blur' }
+        { message: '请输入联系电话', trigger: 'blur' }
       ]
     }
     

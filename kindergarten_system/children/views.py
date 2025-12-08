@@ -267,7 +267,7 @@ class ChildViewSet(viewsets.ModelViewSet):
             df = pd.read_excel(file)
             
             # 检查必要的列
-            required_columns = ['幼儿姓名(*)', '性别(*)', '出生日期(*)', '班级名称(*)', '家长姓名(*)', '家长手机号(*)']
+            required_columns = ['幼儿姓名(*)', '性别(*)', '出生日期(*)', '班级名称(*)', '家长姓名', '家长手机号']
             missing_columns = [col for col in required_columns if col not in df.columns]
             if missing_columns:
                 return Response(
@@ -325,8 +325,8 @@ class ChildViewSet(viewsets.ModelViewSet):
                         'gender': gender,
                         'birth_date': pd.to_datetime(row['出生日期(*)']).date(),
                         'class_id': class_info.id if class_info else None,
-                        'parent_name': str(row['家长姓名(*)']).strip(),
-                        'parent_phone': str(row['家长手机号(*)']).strip(),
+                        'parent_name': str(row['家长姓名']).strip() if pd.notna(row['家长姓名']) else '',
+                        'parent_phone': str(row['家长手机号']).strip() if pd.notna(row['家长手机号']) else ''
                     }
                     
                     # 处理可选字段
@@ -455,8 +455,8 @@ class ChildViewSet(viewsets.ModelViewSet):
             '班级名称(*)': ['大一班', '小一班'],
             '学号': ['', ''],
             '入园日期': ['2023-09-01', '2023-09-01'],
-            '家长姓名(*)': ['张三爸爸', '李四妈妈'],
-            '家长手机号(*)': ['13800138001', '13900139002'],
+            '家长姓名': ['张三爸爸', '李四妈妈'],
+            '家长手机号': ['13800138001', '13900139002'],
             '家长邮箱': ['', ''],
             '家庭地址': ['北京市朝阳区XX小区', '上海市浦东新区XX路'],
             '健康备注': ['无', '对海鲜过敏'],
