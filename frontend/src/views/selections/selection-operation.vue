@@ -156,16 +156,16 @@
     </el-card>
 
     <!-- 调试信息面板 -->
-    <div class="debug-panel">
-      <h4>调试信息</h4>
-      <p>当前选区数量: {{ selectionAreas.length }}</p>
-      <p>当前选区ID列表: {{ selectionAreas.map(a => a.id).join(', ') }}</p>
-      <p>触摸拖拽状态: {{ touchDragging }}</p>
-      <p>拖拽数据: {{ dragData ? dragData.data.name : '无' }}</p>
-      <p>触摸位置: {{ touchCurrentPos.x.toFixed(2) }}, {{ touchCurrentPos.y.toFixed(2) }}</p>
-      <p>当前拖拽目标: {{ dragOverTarget || '无' }}</p>
-      <p>触摸区域: {{ lastTouchArea || '无' }}</p>
-    </div>
+<!--    <div class="debug-panel">-->
+<!--      <h4>调试信息</h4>-->
+<!--      <p>当前选区数量: {{ selectionAreas.length }}</p>-->
+<!--      <p>当前选区ID列表: {{ selectionAreas.map(a => a.id).join(', ') }}</p>-->
+<!--      <p>触摸拖拽状态: {{ touchDragging }}</p>-->
+<!--      <p>拖拽数据: {{ dragData ? dragData.data.name : '无' }}</p>-->
+<!--      <p>触摸位置: {{ touchCurrentPos.x.toFixed(2) }}, {{ touchCurrentPos.y.toFixed(2) }}</p>-->
+<!--      <p>当前拖拽目标: {{ dragOverTarget || '无' }}</p>-->
+<!--      <p>触摸区域: {{ lastTouchArea || '无' }}</p>-->
+<!--    </div>-->
   </div>
 </template>
 
