@@ -637,12 +637,18 @@ const handleDropToArea = async (areaId) => {
   // 获取当前时间作为选择时间
   const selectTime = new Date().toISOString()
 
-  const existingRecord = assignedChildren.value.find(r => r && r.child_id === child.id)
+  const existingRecord = assignedChildren.value.find(r => r && r.child === child.id)
   try {
     if (existingRecord) {
       await updateSelectionRecord(existingRecord.id, {selection_area_id: targetAreaId, select_time: selectTime})
       const index = assignedChildren.value.findIndex(r => r && r.id === existingRecord.id)
-      if (index !== -1) assignedChildren.value[index].selection_area_id = targetAreaId
+      if (index !== -1) {
+        assignedChildren.value[index] = {
+          ...assignedChildren.value[index],
+          selection_area_id: targetAreaId,
+          select_time: selectTime
+        }
+      }
       showFullscreenMessage('success', `${child.name}已重新分配到${currentArea.name}`)
     } else {
       const res = await createSelectionRecord({
