@@ -84,8 +84,12 @@
                 @touchend="handleTouchEnd"
                 @touchcancel="handleTouchCancel"
               >
-                <div class="child-avatar">
-                  <el-avatar :size="childAvatarSize" :src="child.avatar">{{ child.name.charAt(0) }}</el-avatar>
+                <div class="child-avatar-wrapper">
+                  <div class="child-avatar">
+                    <el-avatar :size="childAvatarSize" :src="child.avatar">{{ child.name.charAt(0) }}</el-avatar>
+                  </div>
+                  <!-- 添加选区历史标记 -->
+                  <div v-if="getChildHasHistory(child.id)" class="selection-history-marker">选</div>
                 </div>
                 <div class="child-name">{{ child.name }}</div>
               </div>
@@ -219,6 +223,12 @@ const unassignedChildren = computed(() => {
     .map(item => item.child_id)
   return allChildren.value.filter(child => !assignedIds.includes(child.id))
 })
+// 判断幼儿是否曾经有过选区记录
+const getChildHasHistory = (childId) => {
+  // 检查该幼儿是否在所有选区记录中出现过（不仅限于今日）
+  return assignedChildren.value.some(record => record.child === childId);
+}
+
 
 const totalChildren = computed(() => allChildren.value.length)
 const assignedTodayCount = computed(() => assignedChildren.value.length)
@@ -2367,4 +2377,29 @@ onUnmounted(() => {
 .selection-operation-container:fullscreen .debug-panel {
   display: none;
 }
+/* 幼儿头像包装器 */
+.child-avatar-wrapper {
+  position: relative;
+  display: inline-block;
+}
+
+/* 选区历史标记 */
+.selection-history-marker {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  background-color: #409EFF;
+  color: white;
+  border-radius: 50%;
+  width: 18px;
+  height: 18px;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  box-shadow: 0 0 2px rgba(0, 0, 0, 0.5);
+  z-index: 2;
+}
+
 </style>
