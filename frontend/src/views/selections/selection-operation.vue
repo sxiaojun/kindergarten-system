@@ -156,12 +156,16 @@
               
               <!-- 选区图片展示 -->
               <div class="area-image-container" v-else>
+                <div class="glow-effect"></div>
+                <div class="scan-line"></div>
                 <el-image 
                   :src="area.image" 
                   class="area-image"
-                  fit="cover"
+                  fit="contain"
                   :preview-src-list="[area.image]"
                   preview-teleported
+                  :lazy="true"
+                  :hide-on-click-modal="true"
                 >
                   <template #placeholder>
                     <div class="image-placeholder">加载中...</div>
@@ -172,10 +176,10 @@
                 </el-image>
                 <div class="area-name-overlay">{{ area.name }}</div>
               </div>
+              </div>
             </div>
           </div>
         </div>
-      </div>
     </el-card>
 
     <!-- 调试信息面板 -->
@@ -1726,14 +1730,35 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 50%;
   overflow: hidden;
+  border-radius: 12px;
+  /* 添加基础炫酷效果 */
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+  transition: all 0.3s ease;
+  /* 添加3D透视效果 */
+  perspective: 1000px;
+}
+
+.area-image-container:hover {
+  transform: scale(1.02) rotateY(5deg);
+  box-shadow: 0 0 30px rgba(100, 150, 255, 0.7);
 }
 
 .area-image {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
+  transition: transform 0.3s ease;
+  max-width: 100%;
+  max-height: 100%;
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: crisp-edges;
+  /* 添加滤镜效果增强视觉 */
+  filter: saturate(1.2) contrast(1.1);
+}
+
+.area-image-container:hover .area-image {
+  transform: scale(1.05);
 }
 
 .area-name-overlay {
@@ -1744,9 +1769,87 @@ onUnmounted(() => {
   background: rgba(0, 0, 0, 0.7);
   color: white;
   text-align: center;
-  padding: 4px;
-  font-size: 12px;
+  padding: 12px;
+  font-size: 18px;
   font-weight: bold;
+  text-shadow: 0 0 8px rgba(255, 255, 255, 0.5);
+  backdrop-filter: blur(2px);
+  /* 添加发光效果 */
+  box-shadow: 0 -5px 15px rgba(0, 0, 0, 0.5);
+  /* 添加霓虹灯效果 */
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+/* 添加炫酷的悬浮粒子效果 */
+.area-image-container::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(
+    circle at center,
+    rgba(255, 255, 255, 0.1) 0%,
+    transparent 70%
+  );
+  animation: shine 3s infinite;
+  pointer-events: none;
+  opacity: 0.5;
+}
+
+/* 添加动态边框效果 */
+.area-image-container::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 2px solid transparent;
+  border-radius: 12px;
+  background: linear-gradient(45deg, #00dbde, #fc00ff, #00dbde) border-box;
+  background-size: 300% 300%;
+  mask: linear-gradient(#fff 0 0) padding-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  animation: borderAnimation 2s linear infinite;
+  pointer-events: none;
+  opacity: 0.7;
+}
+
+/* 添加额外的炫酷效果层 */
+.area-image-container .glow-effect {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+  border-radius: 12px;
+  opacity: 0.3;
+  background: radial-gradient(
+    circle at var(--x, 50%) var(--y, 50%),
+    rgba(100, 200, 255, 0.8) 0%,
+    transparent 70%
+  );
+  transition: opacity 0.3s ease;
+}
+
+.area-image-container:hover .glow-effect {
+  opacity: 0.6;
+}
+
+/* 添加扫描线效果 */
+.area-image-container .scan-line {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 10px;
+  background: linear-gradient(to bottom, 
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.5) 50%,
+    rgba(255, 255, 255, 0) 100%);
+  animation: scan 4s linear infinite;
+  pointer-events: none;
+  opacity: 0.7;
 }
 
 .image-placeholder,
@@ -1758,7 +1861,56 @@ onUnmounted(() => {
   height: 100%;
   background: #f5f5f5;
   color: #999;
-  font-size: 12px;
+  font-size: 14px;
+  /* 添加占位图炫酷效果 */
+  background: linear-gradient(45deg, #ddd, #eee, #ddd);
+  background-size: 400% 400%;
+  animation: gradientBG 3s ease infinite;
+}
+
+@keyframes shine {
+  0% {
+    transform: translate(0, 0);
+  }
+  50% {
+    transform: translate(20%, 20%);
+  }
+  100% {
+    transform: translate(0, 0);
+  }
+}
+
+@keyframes borderAnimation {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+@keyframes scan {
+  0% {
+    top: 0;
+  }
+  100% {
+    top: 100%;
+  }
+}
+
+@keyframes gradientBG {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
 }
 
 .black-hole-ring {
