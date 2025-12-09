@@ -46,6 +46,19 @@
         <!-- 已删除选择列 -->
         <el-table-column prop="name" label="选区名称" min-width="120" />
         <el-table-column prop="class_name" label="所属班级" min-width="120" />
+        <el-table-column label="选区图片" min-width="120">
+          <template #default="{ row }">
+            <el-image
+              v-if="row.image"
+              :src="row.image"
+              class="selection-image"
+              fit="cover"
+              :preview-src-list="[row.image]"
+              preview-teleported
+            />
+            <span v-else>暂无图片</span>
+          </template>
+        </el-table-column>
         <!-- 已删除最大容量和当前人数列 -->
         <el-table-column prop="description" label="描述" min-width="150" />
         <el-table-column prop="created_at" label="创建时间" width="180" />
@@ -113,6 +126,22 @@
             placeholder="请输入描述信息"
           />
         </el-form-item>
+        
+        <el-form-item label="选区图片">
+          <el-upload
+            class="avatar-uploader"
+            :action="uploadUrl"
+            :show-file-list="false"
+            :on-success="handleAvatarSuccess"
+            :before-upload="beforeAvatarUpload"
+            :data="uploadData"
+            :headers="uploadHeaders"
+          >
+            <img v-if="formData.image && typeof formData.image === 'string'" :src="formData.image" class="avatar" />
+            <el-icon v-else-if="!formData.image" class="avatar-uploader-icon"><Plus /></el-icon>
+            <div v-else class="file-name">{{ formData.image.name }}</div>
+          </el-upload>
+        </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="handleDialogClose">取消</el-button>
@@ -125,6 +154,7 @@
 <script setup>
 import { ref, reactive, onMounted, computed } from 'vue'
 import { ElMessage } from 'element-plus'
+import { Plus } from '@element-plus/icons-vue'
 import { 
   getSelectionAreas,
   createSelectionArea,
@@ -141,6 +171,13 @@ const dialogTitle = ref('')
 const formRef = ref(null)
 const selectionAreasData = ref([])
 const classList = ref([])
+
+// 上传相关
+const uploadUrl = `${import.meta.env.VITE_API_BASE_URL || ''}/selections/selection-areas/`
+const uploadData = ref({})
+const uploadHeaders = {
+  'Authorization': `Bearer ${localStorage.getItem('token')}`
+}
 
 // 查询条件
 const searchForm = reactive({
@@ -160,8 +197,8 @@ const formData = reactive({
   id: '',
   name: '',
   class_id: '',
-
-  description: ''
+  description: '',
+  image: ''
 })
 
 // 表单验证规则
@@ -264,6 +301,7 @@ const handleCreate = () => {
   formData.name = ''
   formData.class_id = ''
   formData.description = ''
+  formData.image = ''
   dialogVisible.value = true
 }
 
@@ -281,6 +319,7 @@ const handleEdit = async (row) => {
       // 现在可以直接从响应中获取class_id
       formData.class_id = res.class_id || ''
       formData.description = res.description || ''
+      formData.image = res.image || ''
       dialogVisible.value = true
     } else {
       console.error('选区详情响应结构不正确:', res)
@@ -314,8 +353,9 @@ const resetForm = () => {
   formData.id = ''
   formData.name = ''
   formData.class_id = ''
-
   formData.description = ''
+  formData.image = ''
+  originalImageFile.value = null // 同时重置文件引用
   if (formRef.value) {
     formRef.value.resetFields()
   }
@@ -333,19 +373,38 @@ const handleSubmit = async () => {
   try {
     await formRef.value.validate()
     
-    const data = {
-      name: formData.name,
-      class_id: formData.class_id,
-      description: formData.description
+    let data;
+    let isFormData = false;
+    
+    // 如果有图片文件，则使用 FormData
+    if (originalImageFile.value) {
+      data = new FormData()
+      data.append('name', formData.name)
+      data.append('class_id', formData.class_id)
+      data.append('description', formData.description)
+      data.append('image', originalImageFile.value) // 使用原始文件对象
+      isFormData = true;
+    } else {
+      // 否则使用普通对象
+      data = {
+        name: formData.name,
+        class_id: formData.class_id,
+        description: formData.description
+      }
+      
+      // 如果有图片URL，则也添加到数据中
+      if (formData.image) {
+        data.image = formData.image;
+      }
     }
 
     if (formData.id) {
       // 更新
-      await updateSelectionArea(formData.id, data)
+      await updateSelectionArea(formData.id, data, isFormData)
       ElMessage.success('更新成功')
     } else {
       // 创建
-      await createSelectionArea(data)
+      await createSelectionArea(data, isFormData)
       ElMessage.success('创建成功')
     }
     
@@ -361,6 +420,38 @@ const handleSubmit = async () => {
     }
     console.error('提交失败:', error)
   }
+}
+
+// 添加一个新的变量来存储原始文件对象
+const originalImageFile = ref(null);
+
+// 图片上传相关方法
+const handleAvatarSuccess = (response, uploadFile) => {
+  // 仅用于前端预览，不调用后端接口
+  if (response && response.image) {
+    formData.image = response.image;
+  } else {
+    formData.image = URL.createObjectURL(uploadFile.raw);
+  }
+  originalImageFile.value = uploadFile.raw; // 保存原始文件对象用于提交
+}
+
+const beforeAvatarUpload = (rawFile) => {
+  // 检查文件类型
+  if (rawFile.type !== 'image/jpeg' && rawFile.type !== 'image/png') {
+    ElMessage.error('图片必须是 JPG 或 PNG 格式!')
+    return false
+  }
+  // 检查文件大小 (2MB)
+  if (rawFile.size / 1024 / 1024 > 2) {
+    ElMessage.error('图片大小不能超过 2MB!')
+    return false
+  }
+  
+  // 仅用于前端预览，创建预览URL
+  formData.image = URL.createObjectURL(rawFile);
+  originalImageFile.value = rawFile; // 保存原始文件对象用于提交
+  return false; // 返回 false 阻止自动上传
 }
 
 // 组件挂载时获取数据
@@ -419,5 +510,54 @@ onMounted(() => {
 
 .selections-class-select {
   width: 150px;
+}
+
+.selection-image {
+  width: 80px;
+  height: 80px;
+  border-radius: 6px;
+}
+
+.avatar-uploader .avatar {
+  width: 120px;
+  height: 120px;
+  display: block;
+}
+
+.file-name {
+  width: 120px;
+  height: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed #d9d9d9;
+  border-radius: 6px;
+  font-size: 12px;
+  color: #666;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 4px;
+}
+
+.avatar-uploader .el-upload {
+  border: 1px dashed var(--el-border-color);
+  border-radius: 6px;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  transition: var(--el-transition-duration-fast);
+}
+
+.avatar-uploader .el-upload:hover {
+  border-color: var(--el-color-primary);
+}
+
+.el-icon.avatar-uploader-icon {
+  font-size: 28px;
+  color: #8c939d;
+  width: 120px;
+  height: 120px;
+  text-align: center;
 }
 </style>

@@ -15,12 +15,13 @@ class SelectionAreaSerializer(serializers.ModelSerializer):
     class_name = serializers.CharField(source='class_info.name', read_only=True)
     kindergarten_name = serializers.CharField(source='class_info.kindergarten.name', read_only=True)
     class_id = serializers.IntegerField(write_only=True, required=False)
+    image = serializers.ImageField(required=False, allow_null=True)
     
     class Meta:
         model = SelectionArea
         fields = [
             'id', 'name', 'class_id', 'class_name', 'kindergarten_name',
-            'description', 'created_at', 'updated_at'
+            'description', 'image', 'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at', 'class_name', 'kindergarten_name']
     
@@ -66,6 +67,11 @@ class SelectionAreaSerializer(serializers.ModelSerializer):
         data = super().to_representation(instance)
         if hasattr(instance, 'class_info'):
             data['class_id'] = instance.class_info.id
+        # 如果有图片，返回图片的完整URL
+        if instance.image:
+            request = self.context.get('request')
+            if request:
+                data['image'] = request.build_absolute_uri(instance.image.url)
         return data
 
 class SelectionAreaBriefSerializer(serializers.ModelSerializer):

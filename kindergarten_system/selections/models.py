@@ -30,6 +30,15 @@ class SelectionArea(models.Model):
         help_text='选区的详细描述信息'
     )
     
+    # 选区图片
+    image = models.ImageField(
+        '选区图片',
+        upload_to='selection_areas/',
+        blank=True,
+        null=True,
+        help_text='选区的图片'
+    )
+    
     # 创建时间
     created_at = models.DateTimeField(
         '创建时间', 

@@ -126,7 +126,7 @@
               @touchcancel="handleTouchCancel"
             >
               <!-- 黑洞动画效果 -->
-              <div class="black-hole-container">
+              <div class="black-hole-container" v-if="!area.image">
                 <div class="black-hole">
                   <div class="black-hole-core"></div>
                   <div class="black-hole-ring ring-1"></div>
@@ -152,6 +152,25 @@
                     {{ area.name }}<br>Id: {{ area.id }}
                   </div>
                 </div>
+              </div>
+              
+              <!-- 选区图片展示 -->
+              <div class="area-image-container" v-else>
+                <el-image 
+                  :src="area.image" 
+                  class="area-image"
+                  fit="cover"
+                  :preview-src-list="[area.image]"
+                  preview-teleported
+                >
+                  <template #placeholder>
+                    <div class="image-placeholder">加载中...</div>
+                  </template>
+                  <template #error>
+                    <div class="image-error">加载失败</div>
+                  </template>
+                </el-image>
+                <div class="area-name-overlay">{{ area.name }}</div>
               </div>
             </div>
           </div>
@@ -1698,6 +1717,48 @@ onUnmounted(() => {
   0 0 120px #000;
   z-index: 10;
   animation: blackHolePulse 3s infinite alternate;
+}
+
+.area-image-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  overflow: hidden;
+}
+
+.area-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.area-name-overlay {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: rgba(0, 0, 0, 0.7);
+  color: white;
+  text-align: center;
+  padding: 4px;
+  font-size: 12px;
+  font-weight: bold;
+}
+
+.image-placeholder,
+.image-error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  background: #f5f5f5;
+  color: #999;
+  font-size: 12px;
 }
 
 .black-hole-ring {

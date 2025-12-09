@@ -3,7 +3,7 @@ from rest_framework.decorators import action, api_view
 from rest_framework.response import Response
 from rest_framework.decorators import permission_classes
 from rest_framework.permissions import AllowAny
-from rest_framework.parsers import JSONParser
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from django.db.models import Q, Count, Prefetch
 from django.core.exceptions import ValidationError
 from datetime import date, timedelta
@@ -217,6 +217,8 @@ class SelectionAreaViewSet(viewsets.ModelViewSet):
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['name', 'class_info__name']
     ordering_fields = ['created_at', 'name']
+    # 添加解析器类以支持文件上传
+    parser_classes = (MultiPartParser, FormParser, JSONParser)
     
     def get_permissions(self):
         """

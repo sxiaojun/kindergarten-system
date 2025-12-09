@@ -20,20 +20,38 @@ export function getSelectionArea(id) {
   })
 }
 
-export function createSelectionArea(data) {
-  return request({
+export function createSelectionArea(data, isFormData = false) {
+  const config = {
     url: 'selections/selection-areas/',
     method: 'post',
     data
-  })
+  };
+  
+  // 如果是 FormData，需要设置适当的 Content-Type
+  if (isFormData) {
+    config.headers = {
+      'Content-Type': 'multipart/form-data'
+    };
+  }
+  
+  return request(config);
 }
 
-export function updateSelectionArea(id, data) {
-  return request({
+export function updateSelectionArea(id, data, isFormData = false) {
+  const config = {
     url: `selections/selection-areas/${id}/`,
     method: 'put',
     data
-  })
+  };
+  
+  // 如果是 FormData，需要设置适当的 Content-Type
+  if (isFormData) {
+    config.headers = {
+      'Content-Type': 'multipart/form-data'
+    };
+  }
+  
+  return request(config);
 }
 
 export function deleteSelectionArea(id) {
