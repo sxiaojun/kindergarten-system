@@ -14,8 +14,8 @@
               @change="handleClassChange" 
               clearable
               :key="selectKey"
-              :popper-append-to-body="false"
-              :teleported="false"
+              :popper-append-to-body="!isFullscreen"
+              :teleported="!isFullscreen"
               placement="bottom-start"
               style="width: 200px;"
               :popper-class="isFullscreen ? 'fullscreen-select-popper' : 'normal-select-popper'"
@@ -29,8 +29,8 @@
             </el-select>
           </el-form-item>
           <el-form-item>
-            <el-button 
-              :icon="isFullscreen ? 'full-screen-exit' : 'full-screen'" 
+            <el-button
+              :icon="isFullscreen ? 'full-screen-exit' : 'full-screen'"
               @click="toggleFullscreen">
               {{ isFullscreen ? '退出全屏' : '全屏显示' }}
             </el-button>
@@ -38,12 +38,6 @@
         </el-form>
       </div>
     </div>
-    
-    <!-- 全屏模式下用于放置下拉框的容器 -->
-    <div v-if="isFullscreen" class="fullscreen-dropdown-container" id="fullscreenDropdownContainer"></div>
-
-    <!-- 解决全屏模式下班级选择器被遮挡问题的特殊处理 -->
-    <div v-if="isFullscreen" ref="dropdownPlaceholder" style="position: fixed; z-index: 10003; top: 60px; left: 20px;"></div>
 
     <el-card v-loading="loading" class="content-card">
       <template #header>
@@ -71,7 +65,7 @@
             @touchend="handleTouchEnd"
             @touchcancel="handleTouchCancel"
           >
-            <div class="children-list">
+            <div class="children-list" ref="childrenListRef">
               <div
                 v-for="child in unassignedChildren"
                 :key="child.id"
@@ -153,13 +147,13 @@
                   </div>
                 </div>
               </div>
-              
+
               <!-- 选区图片展示 -->
               <div class="area-image-container" v-else>
                 <div class="glow-effect"></div>
                 <div class="scan-line"></div>
-                <el-image 
-                  :src="area.image" 
+                <el-image
+                  :src="area.image"
                   class="area-image"
                   fit="contain"
                   :preview-src-list="[area.image]"
@@ -176,23 +170,14 @@
                 </el-image>
                 <div class="area-name-overlay">{{ area.name }}</div>
               </div>
-              </div>
             </div>
           </div>
         </div>
+      </div>
     </el-card>
 
-    <!-- 调试信息面板 -->
-<!--    <div class="debug-panel">-->
-<!--      <h4>调试信息</h4>-->
-<!--      <p>当前选区数量: {{ selectionAreas.length }}</p>-->
-<!--      <p>当前选区ID列表: {{ selectionAreas.map(a => a.id).join(', ') }}</p>-->
-<!--      <p>触摸拖拽状态: {{ touchDragging }}</p>-->
-<!--      <p>拖拽数据: {{ dragData ? dragData.data.name : '无' }}</p>-->
-<!--      <p>触摸位置: {{ touchCurrentPos.x.toFixed(2) }}, {{ touchCurrentPos.y.toFixed(2) }}</p>-->
-<!--      <p>当前拖拽目标: {{ dragOverTarget || '无' }}</p>-->
-<!--      <p>触摸区域: {{ lastTouchArea || '无' }}</p>-->
-<!--    </div>-->
+    <!-- 全屏模式下的拖拽轨迹容器 -->
+    <div v-if="isFullscreen" class="drag-trail-container" id="dragTrailContainer"></div>
   </div>
 </template>
 
@@ -214,6 +199,7 @@ const loading = ref(false)
 const selectedClassId = ref('')
 const selectKey = ref(0)
 const containerRef = ref(null)
+const childrenListRef = ref(null)
 const formModel = reactive({ selectedClassId: '' })
 const classList = ref([])
 const selectionAreas = ref([])
@@ -224,7 +210,6 @@ const dragOverTarget = ref(null)
 const dragData = ref(null)
 const isFullscreen = ref(false)
 const fullscreenElement = ref(null)
-const dropdownPlaceholder = ref(null)
 
 // Touch 拖拽状态
 const touchDragging = ref(false)
@@ -251,7 +236,6 @@ const getChildHasHistory = (childId) => {
   // 检查该幼儿是否在所有选区记录中出现过（不仅限于今日）
   return assignedChildren.value.some(record => record.child === childId);
 }
-
 
 const totalChildren = computed(() => allChildren.value.length)
 const assignedTodayCount = computed(() => assignedChildren.value.length)
@@ -363,7 +347,7 @@ const getChildrenByArea = (areaId) => {
   return allChildren.value.filter(child => assignedChildIds.includes(child.id))
 }
 
-// 创建拖拽轨迹效果
+// 创建拖拽轨迹效果 - 修复问题3：全屏下彩虹跟随效果
 const createDragTrail = (x, y) => {
   const trail = document.createElement('div')
   trail.className = 'drag-trail'
@@ -377,7 +361,21 @@ const createDragTrail = (x, y) => {
   trail.style.borderRadius = '50%'
   trail.style.background = 'radial-gradient(circle, rgba(100, 200, 255, 0.8), transparent 70%)'
   trail.style.animation = 'trailFade 0.5s forwards'
-  document.body.appendChild(trail)
+  trail.style.boxSizing = 'border-box'
+  trail.style.border = '1px solid rgba(100, 200, 255, 0.8)'
+  trail.style.boxShadow = '0 0 10px rgba(100, 200, 255, 0.8)'
+
+  // 在全屏模式下，将轨迹添加到全屏容器中
+  if (isFullscreen.value) {
+    const container = document.getElementById('dragTrailContainer')
+    if (container) {
+      container.appendChild(trail)
+    } else {
+      document.body.appendChild(trail)
+    }
+  } else {
+    document.body.appendChild(trail)
+  }
 
   // 0.5秒后移除轨迹元素
   setTimeout(() => {
@@ -410,6 +408,9 @@ const createTouchDragPreview = (child) => {
   preview.style.boxShadow = '0 4px 20px rgba(0,0,0,0.5)'
   preview.style.fontSize = '14px'
   preview.style.color = '#fff'
+  preview.style.transform = 'translate(-50%, -50%)'
+  preview.style.left = '0'
+  preview.style.top = '0'
   document.body.appendChild(preview)
   return preview
 }
@@ -433,8 +434,8 @@ const handleTouchStart = (event, type, data) => {
 
 const moveDragPreview = (x, y) => {
   if (touchDragPreview.value) {
-    touchDragPreview.value.style.left = `${x + 10}px`
-    touchDragPreview.value.style.top = `${y + 10}px`
+    touchDragPreview.value.style.left = `${x}px`
+    touchDragPreview.value.style.top = `${y}px`
   }
 
   // 创建拖拽轨迹效果
@@ -603,11 +604,24 @@ const handleDragStart = (event, type, data) => {
 
   // 创建拖拽轨迹效果 - 修复问题3：全屏下彩虹跟随效果
   createDragTrail(event.clientX, event.clientY)
+
+  // 保存原始位置
+  const originalElement = event.target
+  originalElement.dataset.originalPosition = JSON.stringify({
+    left: originalElement.offsetLeft,
+    top: originalElement.offsetTop
+  })
 }
 
 const handleDragEnd = () => {
   dragOverSource.value = false
   dragOverTarget.value = null
+
+  // 重置所有正在拖拽的元素
+  const draggingElements = document.querySelectorAll('.dragging')
+  draggingElements.forEach(el => {
+    el.classList.remove('dragging')
+  })
 }
 
 const handleDragEnter = (areaType, areaId = null) => {
@@ -838,6 +852,28 @@ onMounted(() => {
       position: fixed !important;
       z-index: 1000000 !important;
     }
+    /* 确保幼儿头像在全屏模式下正常显示 */
+    .child-avatar {
+      display: block !important;
+      width: auto !important;
+      height: auto !important;
+    }
+    .child-avatar .el-avatar {
+      display: block !important;
+    }
+    /* 修复全屏闪烁问题 */
+    .selection-operation-container:fullscreen .child-item {
+      -webkit-user-select: none;
+      -moz-user-select: none;
+      -ms-user-select: none;
+      user-select: none;
+    }
+    .selection-operation-container:fullscreen .child-item * {
+      -webkit-user-select: none;
+      -moz-user-select: none;
+      -ms-user-select: none;
+      user-select: none;
+    }
   `
   document.head.appendChild(style)
 })
@@ -861,6 +897,7 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   height: 100vh;
+  overflow: hidden;
 }
 
 .page-header {
@@ -957,7 +994,7 @@ onUnmounted(() => {
   transition: all 0.3s ease;
   background: rgba(30, 30, 46, 0.5);
   backdrop-filter: blur(5px);
-  overflow-y: hidden;
+  overflow-y: auto; /* 添加滚动条 */
   display: flex;
   flex-direction: column;
   position: relative; /* 添加相对定位 */
@@ -1471,6 +1508,10 @@ onUnmounted(() => {
   align-content: flex-start;
   position: relative;
   z-index: 1; /* 确保幼儿列表在背景效果之上 */
+  min-height: 0; /* 允许内容滚动 */
+  overflow-y: auto; /* 添加滚动条 */
+  padding: 5px; /* 添加内边距 */
+  max-height: 100%; /* 限制最大高度 */
 }
 
 /* 悬停时的视觉效果 */
@@ -1484,6 +1525,22 @@ onUnmounted(() => {
 .child-item {
   transition: transform 0.2s ease, box-shadow 0.2s ease;
   cursor: grab;
+  position: relative;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+  background: rgba(30, 30, 46, 0.7);
+  border-radius: 8px;
+  padding: 8px;
+  min-height: 80px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  flex: 0 0 auto; /* 确保子元素不被压缩 */
+  min-width: 80px; /* 最小宽度，适应触摸设备 */
 }
 
 .child-item:hover {
@@ -1497,6 +1554,23 @@ onUnmounted(() => {
   box-shadow: 0 8px 25px rgba(0, 0, 0, 0.5);
   z-index: 100;
   opacity: 0.9;
+  position: fixed !important; /* 在拖拽时使用fixed定位 */
+  top: 0;
+  left: 0;
+  animation: bounceBack 0.5s ease-out forwards;
+}
+
+@keyframes bounceBack {
+  0% {
+    transform: translate(var(--drag-offset-x, 0), var(--drag-offset-y, 0)) scale(1.1);
+  }
+  70% {
+    transform: translate(var(--return-offset-x, 0), var(--return-offset-y, 0)) scale(1.05);
+  }
+  100% {
+    transform: scale(1);
+    position: static; /* 恢复原来的位置 */
+  }
 }
 
 /* 添加拖拽预览效果 */
@@ -1558,8 +1632,9 @@ onUnmounted(() => {
   border-radius: 50%;
   background: radial-gradient(circle, rgba(100, 200, 255, 0.8), transparent 70%);
   animation: trailFade 0.5s forwards;
-  /* 修复问题3：确保在全屏模式下也可见
-  z-index: 1000000 !important;*/
+  box-sizing: border-box;
+  border: 1px solid rgba(100, 200, 255, 0.8);
+  box-shadow: 0 0 10px rgba(100, 200, 255, 0.8);
 }
 
 @keyframes trailFade {
@@ -1843,7 +1918,7 @@ onUnmounted(() => {
   left: 0;
   width: 100%;
   height: 10px;
-  background: linear-gradient(to bottom, 
+  background: linear-gradient(to bottom,
     rgba(255, 255, 255, 0) 0%,
     rgba(255, 255, 255, 0.5) 50%,
     rgba(255, 255, 255, 0) 100%);
@@ -2181,6 +2256,7 @@ onUnmounted(() => {
   min-height: 100vh;
   position: relative;
   z-index: 9998;
+  overflow: hidden;
 }
 
 .selection-operation-container:-webkit-full-screen {
@@ -2189,6 +2265,7 @@ onUnmounted(() => {
   min-height: 100vh;
   position: relative;
   z-index: 9998;
+  overflow: hidden;
 }
 
 .selection-operation-container:-moz-full-screen {
@@ -2197,6 +2274,7 @@ onUnmounted(() => {
   min-height: 100vh;
   position: relative;
   z-index: 9998;
+  overflow: hidden;
 }
 
 .selection-operation-container:-ms-fullscreen {
@@ -2205,6 +2283,7 @@ onUnmounted(() => {
   min-height: 100vh;
   position: relative;
   z-index: 9998;
+  overflow: hidden;
 }
 
 /* 确保班级选择器在全屏模式下可见 */
@@ -2221,24 +2300,6 @@ onUnmounted(() => {
 .class-selector-card .el-select {
   position: relative;
   z-index: 10004;
-}
-
-/* 确保全屏模式下下拉框容器定位正确 */
-.fullscreen-dropdown-container {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-  z-index: 9999;
-  overflow: visible;
-}
-
-/* 非全屏模式下的样式 */
-:not(.selection-operation-container:fullscreen) .el-select-dropdown {
-  max-height: 200px !important;
-  overflow-y: auto !important;
 }
 
 /* 确保下拉菜单在全屏模式下可见 */
@@ -2269,17 +2330,6 @@ onUnmounted(() => {
   will-change: transform;
 }
 
-.fullscreen-dropdown-container {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-  z-index: 2000;
-}
-
-/* 确保下拉框出现在正确位置 */
 .fullscreen-compatible-popper,
 .fullscreen-select-popper {
   z-index: 10009 !important;
@@ -2320,27 +2370,13 @@ onUnmounted(() => {
   background-color: #333 !important;
 }
 
-/* 全屏模式下班级选择器专用容器 */
-.class-selector-portal {
-  position: fixed;
-  top: 20px;
-  left: 150px;
-  z-index: 10006;
-  background: rgba(30, 30, 46, 0.7);
-  padding: 10px 15px;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px 0 rgba(0, 0, 0, 0.3);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-}
-
 /* 提升班级选择器下拉框的z-index */
 .class-selector-wrapper .el-popper,
 .class-selector-card .el-popper {
   z-index: 10008 !important;
 }
 
-/* 响应式设计 */
+/* 响应式设计 - 修复未分配幼儿区域自适应问题 */
 @media (max-width: 1400px) {
   .child-item {
     flex: 1 1 calc(12.5% - 10px); /* 每行最多8个 */
@@ -2398,12 +2434,35 @@ onUnmounted(() => {
   .selection-area {
     min-height: 120px;
   }
+
+  /* 小屏幕下未分配区域的调整 */
+  .unassigned-section {
+    flex: 0 0 35%; /* 减少未分配区域高度 */
+  }
+
+  .selection-areas-section {
+    flex: 0 0 65%; /* 增加选区区域高度 */
+  }
+
+  /* 小屏幕下幼儿项的调整 */
+  .child-item {
+    flex: 1 1 calc(20% - 10px); /* 每行最多5个 */
+    max-width: calc(20% - 10px);
+    min-width: 70px; /* 确保最小宽度 */
+    padding: 6px;
+  }
+
+  .child-name {
+    font-size: 12px;
+  }
 }
 
 @media (max-width: 576px) {
   .child-item {
     flex: 1 1 calc(25% - 10px); /* 每行最多4个 */
     max-width: calc(25% - 10px);
+    min-width: 65px; /* 确保最小宽度 */
+    padding: 5px;
   }
 
   .selection-areas {
@@ -2413,12 +2472,27 @@ onUnmounted(() => {
   .selection-area {
     min-height: 110px;
   }
+
+  /* 小屏幕下未分配区域的进一步调整 */
+  .unassigned-section {
+    flex: 0 0 30%; /* 进一步减少未分配区域高度 */
+  }
+
+  .selection-areas-section {
+    flex: 0 0 70%; /* 增加选区区域高度 */
+  }
+
+  .child-name {
+    font-size: 11px;
+  }
 }
 
 @media (max-width: 400px) {
   .child-item {
     flex: 1 1 calc(33.33% - 10px); /* 每行最多3个 */
     max-width: calc(33.33% - 10px);
+    min-width: 60px; /* 确保最小宽度 */
+    padding: 4px;
   }
 
   .selection-areas {
@@ -2428,6 +2502,19 @@ onUnmounted(() => {
   .selection-area {
     min-height: 100px;
   }
+
+  .child-name {
+    font-size: 10px;
+  }
+}
+
+/* 全屏模式下的自适应调整 */
+.selection-operation-container:fullscreen .unassigned-section {
+  flex: 0 0 40%; /* 全屏下保持40%高度 */
+}
+
+.selection-operation-container:fullscreen .selection-areas-section {
+  flex: 0 0 60%; /* 全屏下保持60%高度 */
 }
 
 /* 添加触摸反馈效果样式 */
@@ -2465,6 +2552,7 @@ onUnmounted(() => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  text-align: center;
 }
 
 /* 平板设备上的特殊样式 */
@@ -2617,4 +2705,141 @@ onUnmounted(() => {
   z-index: 2;
 }
 
+/* 确保幼儿头像在全屏模式下正常显示 */
+.selection-operation-container:fullscreen .child-avatar {
+  display: block !important;
+  width: auto !important;
+  height: auto !important;
+}
+
+.selection-operation-container:fullscreen .child-avatar .el-avatar {
+  display: block !important;
+}
+
+/* 确保彩虹跟随效果在全屏模式下正常显示 */
+.selection-operation-container:fullscreen .drag-trail {
+  position: fixed !important;
+  z-index: 1000000 !important;
+}
+
+/* 确保触摸拖拽预览在全屏模式下正常显示 */
+.selection-operation-container:fullscreen .touch-drag-preview {
+  position: fixed !important;
+  z-index: 9999 !important;
+  pointer-events: none !important;
+}
+
+/* 修复全屏闪烁问题 */
+.selection-operation-container:fullscreen .child-item {
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+
+.selection-operation-container:fullscreen .child-item * {
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+
+/* 拖拽轨迹容器 */
+.drag-trail-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 999999;
+  overflow: visible;
+}
+
+/* 确保全屏模式下头像正常显示 */
+.selection-operation-container:fullscreen .child-avatar {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: auto !important;
+  height: auto !important;
+}
+
+.selection-operation-container:fullscreen .child-avatar .el-avatar {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+/* 修复未分配幼儿区域自适应问题 */
+.children-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  flex: 1;
+  align-content: flex-start;
+  position: relative;
+  z-index: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 5px;
+  max-height: 100%;
+}
+
+/* 修复在小屏幕和全屏模式下未分配幼儿区域自适应问题 */
+.unassigned-area {
+  border: 2px dashed rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  padding: 10px;
+  flex: 1;
+  min-height: 0;
+  transition: all 0.3s ease;
+  background: rgba(30, 30, 46, 0.5);
+  backdrop-filter: blur(5px);
+  overflow-y: auto; /* 添加滚动条 */
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+/* 小屏幕和全屏模式下的优化 */
+@media (max-width: 768px), (display-mode: fullscreen) {
+  .unassigned-area {
+    overflow-y: auto; /* 确保在小屏幕下可以滚动 */
+    padding: 8px; /* 调整内边距 */
+  }
+
+  .children-list {
+    overflow-y: auto; /* 确保内容可以滚动 */
+    max-height: 100%; /* 限制最大高度 */
+    padding: 5px; /* 添加内边距 */
+  }
+
+  .child-item {
+    flex: 1 1 calc(20% - 10px); /* 小屏幕下每行最多5个 */
+    min-width: 60px; /* 确保最小宽度 */
+    min-height: 70px; /* 调整最小高度 */
+    padding: 5px; /* 调整内边距 */
+  }
+
+  .child-avatar {
+    width: 28px !important;
+    height: 28px !important;
+  }
+
+  .child-name {
+    font-size: 10px;
+    line-height: 1.2;
+  }
+}
+
+/* 全屏模式下的优化 */
+.selection-operation-container:fullscreen .unassigned-area {
+  overflow-y: auto;
+}
+
+.selection-operation-container:fullscreen .children-list {
+  overflow-y: auto;
+  max-height: 100%;
+}
 </style>
