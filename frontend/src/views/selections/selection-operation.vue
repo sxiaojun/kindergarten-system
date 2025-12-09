@@ -292,7 +292,7 @@ const handleClassChange = async () => {
     selectionAreas.value = areasRes.results?.items || areasRes.results || areasRes.data?.results || areasRes.items || areasRes || []
     allChildren.value = childrenRes.results?.items || childrenRes.results || childrenRes.data?.results || childrenRes.items || childrenRes || []
     assignedChildren.value = recordsRes.results?.items || recordsRes.results || recordsRes.data?.results || recordsRes.items || recordsRes || []
-
+    console.log("assignedChildren.value", assignedChildren.value)
     // 更新选区宽度
     updateSelectionAreaWidth()
 
@@ -666,7 +666,8 @@ const handleDropToArea = async (areaId) => {
         selection_area_id: targetAreaId,
         select_time: selectTime
       })
-      assignedChildren.value.push(res.data)
+      console.log("assignedChildren.value-push", res)
+      assignedChildren.value.push(res)
       showFullscreenMessage('success', `${child.name}已分配到${currentArea.name}`)
     }
   } catch (error) {
@@ -2377,6 +2378,7 @@ onUnmounted(() => {
 .selection-operation-container:fullscreen .debug-panel {
   display: none;
 }
+
 /* 幼儿头像包装器 */
 .child-avatar-wrapper {
   position: relative;
