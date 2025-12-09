@@ -88,14 +88,6 @@
                 <div class="child-name">{{ child.name }}</div>
               </div>
             </div>
-
-            <!-- 添加炫酷的背景效果 -->
-            <div class="unassigned-background-effects">
-              <div class="nebula" v-for="i in 2" :key="'nebula'+i"></div>
-              <div class="floating-particle" v-for="i in 50" :key="i"></div>
-              <div class="glowing-orb" v-for="i in 5" :key="'orb'+i"></div>
-              <div class="pulse-ring" v-for="i in 4" :key="'ring'+i"></div>
-            </div>
           </div>
         </div>
 
@@ -150,16 +142,10 @@
 
               <!-- 选区图片展示 -->
               <div class="area-image-container" v-else>
-                <div class="glow-effect"></div>
-                <div class="scan-line"></div>
                 <el-image
                   :src="area.image"
                   class="area-image"
-                  fit="contain"
-                  :preview-src-list="[area.image]"
-                  preview-teleported
-                  :lazy="true"
-                  :hide-on-click-modal="true"
+                  fit="cover"
                 >
                   <template #placeholder>
                     <div class="image-placeholder">加载中...</div>
@@ -231,9 +217,9 @@ const unassignedChildren = computed(() => {
     .map(item => item.child_id)
   return allChildren.value.filter(child => !assignedIds.includes(child.id))
 })
+
 // 判断幼儿是否曾经有过选区记录
 const getChildHasHistory = (childId) => {
-  // 检查该幼儿是否在所有选区记录中出现过（不仅限于今日）
   return assignedChildren.value.some(record => record.child === childId);
 }
 
@@ -243,7 +229,6 @@ const unassignedCount = computed(() => totalChildren.value - assignedTodayCount.
 
 // 动态计算幼儿头像大小
 const childAvatarSize = computed(() => {
-  // 根据屏幕宽度动态调整头像大小
   const screenWidth = window.innerWidth
   if (screenWidth < 480) return 32 // 小屏幕
   if (screenWidth < 768) return 40 // 中等屏幕
@@ -281,7 +266,6 @@ const handleClassChange = async () => {
 
   loading.value = true
   try {
-    // 获取今天的日期，格式为 YYYY-MM-DD
     const today = new Date().toISOString().split('T')[0]
 
     const [areasRes, childrenRes, recordsRes] = await Promise.all([
@@ -299,13 +283,9 @@ const handleClassChange = async () => {
     selectionAreas.value = areasRes.results?.items || areasRes.results || areasRes.data?.results || areasRes.items || areasRes || []
     allChildren.value = childrenRes.results?.items || childrenRes.results || childrenRes.data?.results || childrenRes.items || childrenRes || []
     assignedChildren.value = recordsRes.results?.items || recordsRes.results || recordsRes.data?.results || recordsRes.items || recordsRes || []
-    console.log("assignedChildren.value", assignedChildren.value)
+
     // 更新选区宽度
     updateSelectionAreaWidth()
-
-    // 调试信息
-    console.log('获取到的选区列表:', selectionAreas.value)
-    console.log('选区ID列表:', selectionAreas.value.map(a => a.id))
 
   } catch (error) {
     console.error('获取数据失败:', error)
@@ -347,7 +327,7 @@ const getChildrenByArea = (areaId) => {
   return allChildren.value.filter(child => assignedChildIds.includes(child.id))
 }
 
-// 创建拖拽轨迹效果 - 修复问题3：全屏下彩虹跟随效果
+// 创建拖拽轨迹效果
 const createDragTrail = (x, y) => {
   const trail = document.createElement('div')
   trail.className = 'drag-trail'
@@ -365,7 +345,6 @@ const createDragTrail = (x, y) => {
   trail.style.border = '1px solid rgba(100, 200, 255, 0.8)'
   trail.style.boxShadow = '0 0 10px rgba(100, 200, 255, 0.8)'
 
-  // 在全屏模式下，将轨迹添加到全屏容器中
   if (isFullscreen.value) {
     const container = document.getElementById('dragTrailContainer')
     if (container) {
@@ -377,7 +356,6 @@ const createDragTrail = (x, y) => {
     document.body.appendChild(trail)
   }
 
-  // 0.5秒后移除轨迹元素
   setTimeout(() => {
     if (trail.parentNode) {
       trail.parentNode.removeChild(trail)
@@ -442,49 +420,34 @@ const moveDragPreview = (x, y) => {
   createDragTrail(x, y)
 }
 
-// 检测当前触摸位置的选区 - 修复问题2：扩展检测区域到整个选区
+// 检测当前触摸位置的选区
 const detectTouchArea = (x, y) => {
-  console.log(`检测触摸位置: x=${x}, y=${y}`)
-
   // 1. 首先检查是否在未分配区域
   const unassignedArea = document.querySelector('.unassigned-area')
   if (unassignedArea) {
     const unassignedRect = unassignedArea.getBoundingClientRect()
-    console.log(`未分配区域边界: ${unassignedRect.left}, ${unassignedRect.top}, ${unassignedRect.right}, ${unassignedRect.bottom}`)
     if (x >= unassignedRect.left && x <= unassignedRect.right &&
         y >= unassignedRect.top && y <= unassignedRect.bottom) {
-      console.log('检测到未分配区域')
       return { type: 'source', id: null }
     }
   }
 
-  // 2. 检查所有选区区域 - 修复问题2：使用整个选区容器而非黑洞中心
+  // 2. 检查所有选区区域
   const areas = document.querySelectorAll('.selection-area')
-  console.log(`找到 ${areas.length} 个选区元素`)
-
   for (const area of areas) {
     const rect = area.getBoundingClientRect()
-    console.log(`选区 ${area.dataset.areaId} 边界: ${rect.left}, ${rect.top}, ${rect.right}, ${rect.bottom}`)
-
-    // 修复问题2：检测整个选区区域而非黑洞中心
     if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
       const areaId = area.dataset.areaId
-      console.log(`检测到选区 ${areaId}`)
-
-      // 验证选区是否存在于当前列表中 - 修复问题1：类型转换
       const exists = selectionAreas.value.some(a => parseInt(a.id) === parseInt(areaId))
       if (exists) {
-        console.log(`选区 ${areaId} 存在于当前列表中`)
         return { type: 'target', id: areaId }
       } else {
-        console.log(`选区 ${areaId} 不存在于当前列表中`)
         return { type: 'target', id: areaId }
       }
     }
   }
 
   // 3. 如果没有找到匹配区域，返回null
-  console.log('未检测到任何区域')
   return { type: null, id: null }
 }
 
@@ -537,27 +500,18 @@ const handleTouchEnd = async (event) => {
     const y = event.changedTouches[0].clientY
     const areaInfo = detectTouchArea(x, y)
 
-    console.log('触摸结束，检测到区域:', areaInfo)
-
     if (areaInfo.type === 'source') {
       await handleDropToSource()
     } else if (areaInfo.type === 'target' && areaInfo.id) {
-      // 验证选区存在性 - 修复类型转换问题
-      console.log('验证选区是否存在，当前选区列表:', selectionAreas.value.map(a => a.id))
-      console.log('目标选区ID:', areaInfo.id)
-
       const targetAreaId = parseInt(areaInfo.id)
       const targetArea = selectionAreas.value.find(a => parseInt(a.id) === targetAreaId)
 
       if (targetArea) {
-        console.log(`验证选区 ${targetAreaId} 存在，执行分配`)
         await handleDropToArea(targetAreaId)
       } else {
-        console.log(`验证选区 ${targetAreaId} 不存在`)
         showFullscreenMessage('error', '选区不存在')
       }
     } else {
-      // 检查是否有选区被检测到但不存在
       const allAreas = document.querySelectorAll('.selection-area')
       let foundArea = false
       for (const area of allAreas) {
@@ -569,10 +523,8 @@ const handleTouchEnd = async (event) => {
       }
 
       if (foundArea) {
-        console.log('检测到选区但验证失败')
         showFullscreenMessage('error', '选区不存在')
       } else {
-        console.log('未检测到任何有效区域')
         showFullscreenMessage('warning', '请将幼儿拖拽到有效选区')
       }
     }
@@ -582,7 +534,6 @@ const handleTouchEnd = async (event) => {
 }
 
 const handleTouchCancel = () => {
-  console.log('触摸取消')
   cleanupTouchDrag()
 }
 
@@ -602,7 +553,7 @@ const handleDragStart = (event, type, data) => {
   event.dataTransfer.setDragImage(dragImage, 0, 0)
   setTimeout(() => document.body.removeChild(dragImage), 0)
 
-  // 创建拖拽轨迹效果 - 修复问题3：全屏下彩虹跟随效果
+  // 创建拖拽轨迹效果
   createDragTrail(event.clientX, event.clientY)
 
   // 保存原始位置
@@ -656,15 +607,10 @@ const handleDropToArea = async (areaId) => {
   if (!dragData.value || dragData.value.type !== 'child') return
   const child = dragData.value.data
 
-  // 验证选区是否存在 - 修复类型转换问题
-  console.log('分配前验证选区是否存在，当前选区列表:', selectionAreas.value.map(a => a.id))
-  console.log('分配目标选区ID:', areaId)
-
   const targetAreaId = parseInt(areaId)
   const currentArea = selectionAreas.value.find(a => parseInt(a.id) === targetAreaId)
 
   if (!currentArea) {
-    console.log(`选区 ${targetAreaId} 不存在于当前列表中`)
     showFullscreenMessage('error', '选区不存在')
     return
   }
@@ -703,7 +649,6 @@ const handleDropToArea = async (areaId) => {
         selection_area_id: targetAreaId,
         select_time: selectTime
       })
-      console.log("assignedChildren.value-push", res)
       assignedChildren.value.push(res)
       showFullscreenMessage('success', `${child.name}已分配到${currentArea.name}`)
     }
@@ -770,17 +715,14 @@ const handleResize = debounce(() => {
 
 // 监听屏幕大小变化，更新头像大小
 const handleScreenResize = debounce(() => {
-  // 触发响应式更新
   selectKey.value += 1
 }, 100)
 
 // 在全屏模式下显示消息
 const showFullscreenMessage = (type, message) => {
   if (isFullscreen.value) {
-    // 在全屏模式下，将消息显示在全屏容器内
     const container = containerRef.value
     if (container) {
-      // 创建消息元素
       const messageEl = document.createElement('div')
       messageEl.className = `el-message el-message--${type}`
       messageEl.style.cssText = `
@@ -799,22 +741,18 @@ const showFullscreenMessage = (type, message) => {
         font-size: 14px;
       `
 
-      // 添加图标
       const iconEl = document.createElement('i')
       iconEl.className = `el-message__icon el-icon-${type === 'success' ? 'success' : type === 'error' ? 'error' : 'warning'}`
       iconEl.style.marginRight = '10px'
       messageEl.appendChild(iconEl)
 
-      // 添加文本
       const textEl = document.createElement('p')
       textEl.textContent = message
       textEl.style.margin = '0'
       messageEl.appendChild(textEl)
 
-      // 添加到全屏容器
       container.appendChild(messageEl)
 
-      // 3秒后自动移除
       setTimeout(() => {
         if (messageEl.parentNode) {
           messageEl.parentNode.removeChild(messageEl)
@@ -847,12 +785,10 @@ onMounted(() => {
     .el-select-dropdown{z-index:9999!important;}
     .el-message{z-index:999999!important;}
     .el-message-box{z-index:999999!important;}
-    /* 修复问题3：全屏下彩虹跟随效果 */
     .drag-trail {
       position: fixed !important;
       z-index: 1000000 !important;
     }
-    /* 确保幼儿头像在全屏模式下正常显示 */
     .child-avatar {
       display: block !important;
       width: auto !important;
@@ -861,7 +797,6 @@ onMounted(() => {
     .child-avatar .el-avatar {
       display: block !important;
     }
-    /* 修复全屏闪烁问题 */
     .selection-operation-container:fullscreen .child-item {
       -webkit-user-select: none;
       -moz-user-select: none;
@@ -975,11 +910,11 @@ onUnmounted(() => {
 }
 
 .unassigned-section {
-  flex: 0 0 40%; /* 固定占用40%高度 */
+  flex: 0 0 40%;
 }
 
 .selection-areas-section {
-  flex: 0 0 60%; /* 固定占用60%高度 */
+  flex: 0 0 60%;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -994,510 +929,10 @@ onUnmounted(() => {
   transition: all 0.3s ease;
   background: rgba(30, 30, 46, 0.5);
   backdrop-filter: blur(5px);
-  overflow-y: auto; /* 添加滚动条 */
+  overflow: hidden;
   display: flex;
   flex-direction: column;
-  position: relative; /* 添加相对定位 */
-}
-
-/* 未分配区域的炫酷背景效果 */
-.unassigned-background-effects {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-  z-index: 0;
-}
-
-.floating-particle {
-  position: absolute;
-  width: 6px;
-  height: 6px;
-  background: rgba(255, 255, 255, 0.3);
-  border-radius: 50%;
-  animation: floatParticle 8s infinite linear;
-  box-shadow: 0 0 10px rgba(100, 200, 255, 0.8);
-}
-
-.floating-particle:nth-child(2n) {
-  background: rgba(100, 200, 255, 0.4);
-  width: 4px;
-  height: 4px;
-  box-shadow: 0 0 8px rgba(100, 200, 255, 0.6);
-}
-
-.floating-particle:nth-child(3n) {
-  background: rgba(255, 100, 200, 0.4);
-  width: 5px;
-  height: 5px;
-  box-shadow: 0 0 12px rgba(255, 100, 200, 0.6);
-}
-
-.floating-particle:nth-child(4n) {
-  background: rgba(100, 255, 200, 0.4);
-  width: 3px;
-  height: 3px;
-  box-shadow: 0 0 6px rgba(100, 255, 200, 0.6);
-}
-
-/* 增加更多浮动粒子 */
-.floating-particle.extra {
-  width: 2px;
-  height: 2px;
-  animation-duration: 12s;
-}
-
-.floating-particle.extra:nth-child(2n) {
-  background: rgba(255, 200, 100, 0.4);
-  width: 3px;
-  height: 3px;
-  box-shadow: 0 0 8px rgba(255, 200, 100, 0.6);
-}
-
-.floating-particle.extra:nth-child(3n) {
-  background: rgba(200, 100, 255, 0.4);
-  width: 4px;
-  height: 4px;
-  box-shadow: 0 0 10px rgba(200, 100, 255, 0.6);
-}
-
-/* 为每个粒子设置不同的初始位置和动画延迟 */
-.floating-particle:nth-child(1) {
-  top: 10%;
-  left: 10%;
-  animation-delay: 0s;
-}
-
-.floating-particle:nth-child(2) {
-  top: 20%;
-  left: 80%;
-  animation-delay: 1s;
-}
-
-.floating-particle:nth-child(3) {
-  top: 30%;
-  left: 30%;
-  animation-delay: 2s;
-}
-
-.floating-particle:nth-child(4) {
-  top: 40%;
-  left: 70%;
-  animation-delay: 3s;
-}
-
-.floating-particle:nth-child(5) {
-  top: 50%;
-  left: 20%;
-  animation-delay: 4s;
-}
-
-.floating-particle:nth-child(6) {
-  top: 60%;
-  left: 60%;
-  animation-delay: 5s;
-}
-
-.floating-particle:nth-child(7) {
-  top: 70%;
-  left: 40%;
-  animation-delay: 6s;
-}
-
-.floating-particle:nth-child(8) {
-  top: 80%;
-  left: 80%;
-  animation-delay: 7s;
-}
-
-.floating-particle:nth-child(9) {
-  top: 15%;
-  left: 50%;
-  animation-delay: 0.5s;
-}
-
-.floating-particle:nth-child(10) {
-  top: 25%;
-  left: 25%;
-  animation-delay: 1.5s;
-}
-
-.floating-particle:nth-child(11) {
-  top: 35%;
-  left: 65%;
-  animation-delay: 2.5s;
-}
-
-.floating-particle:nth-child(12) {
-  top: 45%;
-  left: 15%;
-  animation-delay: 3.5s;
-}
-
-.floating-particle:nth-child(13) {
-  top: 55%;
-  left: 55%;
-  animation-delay: 4.5s;
-}
-
-.floating-particle:nth-child(14) {
-  top: 65%;
-  left: 35%;
-  animation-delay: 5.5s;
-}
-
-.floating-particle:nth-child(15) {
-  top: 75%;
-  left: 75%;
-  animation-delay: 6.5s;
-}
-
-.floating-particle:nth-child(16) {
-  top: 85%;
-  left: 45%;
-  animation-delay: 7.5s;
-}
-
-.floating-particle:nth-child(17) {
-  top: 12%;
-  left: 90%;
-  animation-delay: 0.8s;
-}
-
-.floating-particle:nth-child(18) {
-  top: 22%;
-  left: 10%;
-  animation-delay: 1.8s;
-}
-
-.floating-particle:nth-child(19) {
-  top: 32%;
-  left: 80%;
-  animation-delay: 2.8s;
-}
-
-.floating-particle:nth-child(20) {
-  top: 42%;
-  left: 20%;
-  animation-delay: 3.8s;
-}
-
-.floating-particle:nth-child(21) {
-  top: 52%;
-  left: 60%;
-  animation-delay: 4.8s;
-}
-
-.floating-particle:nth-child(22) {
-  top: 62%;
-  left: 30%;
-  animation-delay: 5.8s;
-}
-
-.floating-particle:nth-child(23) {
-  top: 72%;
-  left: 70%;
-  animation-delay: 6.8s;
-}
-
-.floating-particle:nth-child(24) {
-  top: 82%;
-  left: 40%;
-  animation-delay: 7.8s;
-}
-
-.floating-particle:nth-child(25) {
-  top: 18%;
-  left: 15%;
-  animation-delay: 0.3s;
-}
-
-.floating-particle:nth-child(26) {
-  top: 28%;
-  left: 85%;
-  animation-delay: 1.3s;
-}
-
-.floating-particle:nth-child(27) {
-  top: 38%;
-  left: 35%;
-  animation-delay: 2.3s;
-}
-
-.floating-particle:nth-child(28) {
-  top: 48%;
-  left: 65%;
-  animation-delay: 3.3s;
-}
-
-.floating-particle:nth-child(29) {
-  top: 58%;
-  left: 25%;
-  animation-delay: 4.3s;
-}
-
-.floating-particle:nth-child(30) {
-  top: 68%;
-  left: 75%;
-  animation-delay: 5.3s;
-}
-
-.floating-particle:nth-child(31) {
-  top: 5%;
-  left: 40%;
-  animation-delay: 0.2s;
-}
-
-.floating-particle:nth-child(32) {
-  top: 15%;
-  left: 70%;
-  animation-delay: 1.2s;
-}
-
-.floating-particle:nth-child(33) {
-  top: 25%;
-  left: 10%;
-  animation-delay: 2.2s;
-}
-
-.floating-particle:nth-child(34) {
-  top: 35%;
-  left: 80%;
-  animation-delay: 3.3s;
-}
-
-.floating-particle:nth-child(35) {
-  top: 45%;
-  left: 30%;
-  animation-delay: 4.2s;
-}
-
-.floating-particle:nth-child(36) {
-  top: 55%;
-  left: 60%;
-  animation-delay: 5.2s;
-}
-
-.floating-particle:nth-child(37) {
-  top: 65%;
-  left: 20%;
-  animation-delay: 6.2s;
-}
-
-.floating-particle:nth-child(38) {
-  top: 75%;
-  left: 90%;
-  animation-delay: 7.2s;
-}
-
-.floating-particle:nth-child(39) {
-  top: 85%;
-  left: 50%;
-  animation-delay: 0.7s;
-}
-
-.floating-particle:nth-child(40) {
-  top: 95%;
-  left: 25%;
-  animation-delay: 1.7s;
-}
-
-.floating-particle:nth-child(41) {
-  top: 8%;
-  left: 65%;
-  animation-delay: 2.7s;
-}
-
-.floating-particle:nth-child(42) {
-  top: 18%;
-  left: 15%;
-  animation-delay: 3.7s;
-}
-
-.floating-particle:nth-child(43) {
-  top: 28%;
-  left: 75%;
-  animation-delay: 4.7s;
-}
-
-.floating-particle:nth-child(44) {
-  top: 38%;
-  left: 35%;
-  animation-delay: 5.7s;
-}
-
-.floating-particle:nth-child(45) {
-  top: 48%;
-  left: 85%;
-  animation-delay: 6.7s;
-}
-
-.floating-particle:nth-child(46) {
-  top: 58%;
-  left: 45%;
-  animation-delay: 7.7s;
-}
-
-.floating-particle:nth-child(47) {
-  top: 68%;
-  left: 5%;
-  animation-delay: 0.9s;
-}
-
-.floating-particle:nth-child(48) {
-  top: 78%;
-  left: 55%;
-  animation-delay: 1.9s;
-}
-
-.floating-particle:nth-child(49) {
-  top: 88%;
-  left: 95%;
-  animation-delay: 2.9s;
-}
-
-.floating-particle:nth-child(50) {
-  top: 3%;
-  left: 30%;
-  animation-delay: 3.9s;
-}
-
-/* 发光球体 */
-.glowing-orb {
-  position: absolute;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(100, 200, 255, 0.8), transparent 70%);
-  box-shadow: 0 0 30px rgba(100, 200, 255, 0.5);
-  animation: floatOrb 15s infinite ease-in-out;
-  opacity: 0.7;
-}
-
-.glowing-orb:nth-child(1) {
-  width: 40px;
-  height: 40px;
-  top: 20%;
-  left: 15%;
-  animation-delay: 0s;
-}
-
-.glowing-orb:nth-child(2) {
-  width: 30px;
-  height: 30px;
-  top: 70%;
-  left: 80%;
-  animation-delay: 2s;
-  background: radial-gradient(circle, rgba(255, 100, 200, 0.8), transparent 70%);
-  box-shadow: 0 0 30px rgba(255, 100, 200, 0.5);
-}
-
-.glowing-orb:nth-child(3) {
-  width: 50px;
-  height: 50px;
-  top: 40%;
-  left: 50%;
-  animation-delay: 4s;
-  background: radial-gradient(circle, rgba(100, 255, 200, 0.8), transparent 70%);
-  box-shadow: 0 0 30px rgba(100, 255, 200, 0.5);
-}
-
-.glowing-orb:nth-child(4) {
-  width: 35px;
-  height: 35px;
-  top: 60%;
-  left: 20%;
-  animation-delay: 6s;
-  background: radial-gradient(circle, rgba(200, 100, 255, 0.8), transparent 70%);
-  box-shadow: 0 0 30px rgba(200, 100, 255, 0.5);
-}
-
-.glowing-orb:nth-child(5) {
-  width: 45px;
-  height: 45px;
-  top: 30%;
-  left: 70%;
-  animation-delay: 8s;
-  background: radial-gradient(circle, rgba(255, 200, 100, 0.8), transparent 70%);
-  box-shadow: 0 0 30px rgba(255, 200, 100, 0.5);
-}
-
-/* 添加脉冲环效果 */
-.pulse-ring {
-  position: absolute;
-  border-radius: 50%;
-  border: 2px solid rgba(255, 255, 255, 0.5);
-  animation: pulseRing 4s infinite ease-out;
-}
-
-.pulse-ring:nth-child(1) {
-  top: 30%;
-  left: 25%;
-  width: 20px;
-  height: 20px;
-  animation-delay: 0s;
-}
-
-.pulse-ring:nth-child(2) {
-  top: 60%;
-  left: 70%;
-  width: 30px;
-  height: 30px;
-  animation-delay: 1s;
-}
-
-.pulse-ring:nth-child(3) {
-  top: 40%;
-  left: 60%;
-  width: 25px;
-  height: 25px;
-  animation-delay: 2s;
-}
-
-.pulse-ring:nth-child(4) {
-  top: 70%;
-  left: 30%;
-  width: 15px;
-  height: 15px;
-  animation-delay: 3s;
-}
-
-/* 星云效果 */
-.nebula {
-  position: absolute;
-  border-radius: 50%;
-  background: radial-gradient(
-      ellipse at center,
-      rgba(120, 100, 255, 0.3) 0%,
-      rgba(80, 60, 200, 0.2) 40%,
-      rgba(40, 30, 100, 0.1) 70%,
-      transparent 100%
-  );
-  filter: blur(20px);
-  animation: nebulaFloat 25s infinite linear;
-}
-
-.nebula:nth-child(1) {
-  top: 20%;
-  left: 30%;
-  width: 150px;
-  height: 150px;
-  animation-delay: 0s;
-}
-
-.nebula:nth-child(2) {
-  top: 50%;
-  left: 70%;
-  width: 200px;
-  height: 200px;
-  animation-delay: 5s;
-  background: radial-gradient(
-      ellipse at center,
-      rgba(255, 100, 150, 0.3) 0%,
-      rgba(200, 60, 100, 0.2) 40%,
-      rgba(100, 30, 50, 0.1) 70%,
-      transparent 100%
-  );
+  position: relative;
 }
 
 .children-list {
@@ -1507,11 +942,10 @@ onUnmounted(() => {
   flex: 1;
   align-content: flex-start;
   position: relative;
-  z-index: 1; /* 确保幼儿列表在背景效果之上 */
-  min-height: 0; /* 允许内容滚动 */
-  overflow-y: auto; /* 添加滚动条 */
-  padding: 5px; /* 添加内边距 */
-  max-height: 100%; /* 限制最大高度 */
+  z-index: 1;
+  min-height: 0;
+  padding: 5px;
+  overflow: hidden;
 }
 
 /* 悬停时的视觉效果 */
@@ -1539,8 +973,8 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   text-align: center;
-  flex: 0 0 auto; /* 确保子元素不被压缩 */
-  min-width: 80px; /* 最小宽度，适应触摸设备 */
+  flex: 0 0 auto;
+  min-width: 80px;
 }
 
 .child-item:hover {
@@ -1554,7 +988,7 @@ onUnmounted(() => {
   box-shadow: 0 8px 25px rgba(0, 0, 0, 0.5);
   z-index: 100;
   opacity: 0.9;
-  position: fixed !important; /* 在拖拽时使用fixed定位 */
+  position: fixed !important;
   top: 0;
   left: 0;
   animation: bounceBack 0.5s ease-out forwards;
@@ -1569,7 +1003,7 @@ onUnmounted(() => {
   }
   100% {
     transform: scale(1);
-    position: static; /* 恢复原来的位置 */
+    position: static;
   }
 }
 
@@ -1622,7 +1056,7 @@ onUnmounted(() => {
   }
 }
 
-/* 拖拽轨迹效果 - 修复问题3：全屏下彩虹跟随效果 */
+/* 拖拽轨迹效果 */
 .drag-trail {
   position: fixed;
   pointer-events: none;
@@ -1644,71 +1078,6 @@ onUnmounted(() => {
   }
 }
 
-/* 浮动粒子动画 */
-@keyframes floatParticle {
-  0% {
-    transform: translate(0, 0) rotate(0deg);
-    opacity: 0;
-  }
-  10% {
-    opacity: 1;
-  }
-  90% {
-    opacity: 1;
-  }
-  100% {
-    transform: translate(20px, -20px) rotate(360deg);
-    opacity: 0;
-  }
-}
-
-/* 浮动球体动画 */
-@keyframes floatOrb {
-  0%, 100% {
-    transform: translate(0, 0);
-  }
-  25% {
-    transform: translate(20px, -15px);
-  }
-  50% {
-    transform: translate(10px, 20px);
-  }
-  75% {
-    transform: translate(-15px, 10px);
-  }
-}
-
-/* 脉冲环动画 */
-@keyframes pulseRing {
-  0% {
-    transform: scale(0.5);
-    opacity: 1;
-  }
-  100% {
-    transform: scale(3);
-    opacity: 0;
-  }
-}
-
-/* 星云浮动动画 */
-@keyframes nebulaFloat {
-  0% {
-    transform: translate(0, 0) rotate(0deg);
-  }
-  25% {
-    transform: translate(20px, 10px) rotate(90deg);
-  }
-  50% {
-    transform: translate(10px, -20px) rotate(180deg);
-  }
-  75% {
-    transform: translate(-15px, 15px) rotate(270deg);
-  }
-  100% {
-    transform: translate(0, 0) rotate(360deg);
-  }
-}
-
 .selection-areas {
   display: flex;
   flex-wrap: nowrap;
@@ -1718,11 +1087,11 @@ onUnmounted(() => {
   overflow-y: hidden;
   align-content: stretch;
   min-height: 0;
-  padding-bottom: 8px; /* 防止滚动条遮挡内容 */
+  padding-bottom: 8px;
 }
 
 .selection-area {
-  flex: 0 0 auto; /* 改为固定尺寸，由JS控制宽度 */
+  flex: 0 0 auto;
   background: #000;
   border-radius: 12px;
   transition: all 0.3s ease;
@@ -1734,8 +1103,6 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   min-height: 160px;
-  /* 宽度由JS动态设置 */
-  /* 修复问题2：增加选区检测区域 */
   cursor: pointer;
 }
 
@@ -1807,33 +1174,18 @@ onUnmounted(() => {
   justify-content: center;
   overflow: hidden;
   border-radius: 12px;
-  /* 添加基础炫酷效果 */
-  box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
-  transition: all 0.3s ease;
-  /* 添加3D透视效果 */
-  perspective: 1000px;
-}
-
-.area-image-container:hover {
-  transform: scale(1.02) rotateY(5deg);
-  box-shadow: 0 0 30px rgba(100, 150, 255, 0.7);
+  /* 去掉炫酷效果 */
 }
 
 .area-image {
   width: 100%;
   height: 100%;
-  object-fit: contain;
+  object-fit: cover;
   transition: transform 0.3s ease;
   max-width: 100%;
   max-height: 100%;
   image-rendering: -webkit-optimize-contrast;
   image-rendering: crisp-edges;
-  /* 添加滤镜效果增强视觉 */
-  filter: saturate(1.2) contrast(1.1);
-}
-
-.area-image-container:hover .area-image {
-  transform: scale(1.05);
 }
 
 .area-name-overlay {
@@ -1849,82 +1201,7 @@ onUnmounted(() => {
   font-weight: bold;
   text-shadow: 0 0 8px rgba(255, 255, 255, 0.5);
   backdrop-filter: blur(2px);
-  /* 添加发光效果 */
-  box-shadow: 0 -5px 15px rgba(0, 0, 0, 0.5);
-  /* 添加霓虹灯效果 */
   border-top: 1px solid rgba(255, 255, 255, 0.2);
-}
-
-/* 添加炫酷的悬浮粒子效果 */
-.area-image-container::before {
-  content: '';
-  position: absolute;
-  top: -50%;
-  left: -50%;
-  width: 200%;
-  height: 200%;
-  background: radial-gradient(
-    circle at center,
-    rgba(255, 255, 255, 0.1) 0%,
-    transparent 70%
-  );
-  animation: shine 3s infinite;
-  pointer-events: none;
-  opacity: 0.5;
-}
-
-/* 添加动态边框效果 */
-.area-image-container::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border: 2px solid transparent;
-  border-radius: 12px;
-  background: linear-gradient(45deg, #00dbde, #fc00ff, #00dbde) border-box;
-  background-size: 300% 300%;
-  mask: linear-gradient(#fff 0 0) padding-box, linear-gradient(#fff 0 0);
-  mask-composite: exclude;
-  animation: borderAnimation 2s linear infinite;
-  pointer-events: none;
-  opacity: 0.7;
-}
-
-/* 添加额外的炫酷效果层 */
-.area-image-container .glow-effect {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  pointer-events: none;
-  border-radius: 12px;
-  opacity: 0.3;
-  background: radial-gradient(
-    circle at var(--x, 50%) var(--y, 50%),
-    rgba(100, 200, 255, 0.8) 0%,
-    transparent 70%
-  );
-  transition: opacity 0.3s ease;
-}
-
-.area-image-container:hover .glow-effect {
-  opacity: 0.6;
-}
-
-/* 添加扫描线效果 */
-.area-image-container .scan-line {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 10px;
-  background: linear-gradient(to bottom,
-    rgba(255, 255, 255, 0) 0%,
-    rgba(255, 255, 255, 0.5) 50%,
-    rgba(255, 255, 255, 0) 100%);
-  animation: scan 4s linear infinite;
-  pointer-events: none;
-  opacity: 0.7;
 }
 
 .image-placeholder,
@@ -1937,55 +1214,6 @@ onUnmounted(() => {
   background: #f5f5f5;
   color: #999;
   font-size: 14px;
-  /* 添加占位图炫酷效果 */
-  background: linear-gradient(45deg, #ddd, #eee, #ddd);
-  background-size: 400% 400%;
-  animation: gradientBG 3s ease infinite;
-}
-
-@keyframes shine {
-  0% {
-    transform: translate(0, 0);
-  }
-  50% {
-    transform: translate(20%, 20%);
-  }
-  100% {
-    transform: translate(0, 0);
-  }
-}
-
-@keyframes borderAnimation {
-  0% {
-    background-position: 0% 50%;
-  }
-  50% {
-    background-position: 100% 50%;
-  }
-  100% {
-    background-position: 0% 50%;
-  }
-}
-
-@keyframes scan {
-  0% {
-    top: 0;
-  }
-  100% {
-    top: 100%;
-  }
-}
-
-@keyframes gradientBG {
-  0% {
-    background-position: 0% 50%;
-  }
-  50% {
-    background-position: 100% 50%;
-  }
-  100% {
-    background-position: 0% 50%;
-  }
 }
 
 .black-hole-ring {
@@ -2127,7 +1355,7 @@ onUnmounted(() => {
   color: #fff;
   font-weight: bold;
   white-space: nowrap;
-  animation: infallingText 3s linear infinite; /* 从1.5s改为3s，降低速度 */
+  animation: infallingText 3s linear infinite;
   text-shadow: 0 0 10px rgba(255, 255, 255, 1);
   z-index: 5;
   pointer-events: none;
@@ -2376,10 +1604,10 @@ onUnmounted(() => {
   z-index: 10008 !important;
 }
 
-/* 响应式设计 - 修复未分配幼儿区域自适应问题 */
+/* 响应式设计 */
 @media (max-width: 1400px) {
   .child-item {
-    flex: 1 1 calc(12.5% - 10px); /* 每行最多8个 */
+    flex: 1 1 calc(12.5% - 10px);
     max-width: calc(12.5% - 10px);
   }
 
@@ -2394,7 +1622,7 @@ onUnmounted(() => {
 
 @media (max-width: 1200px) {
   .child-item {
-    flex: 1 1 calc(14.28% - 10px); /* 每行最多7个 */
+    flex: 1 1 calc(14.28% - 10px);
     max-width: calc(14.28% - 10px);
   }
 
@@ -2409,7 +1637,7 @@ onUnmounted(() => {
 
 @media (max-width: 992px) {
   .child-item {
-    flex: 1 1 calc(16.66% - 10px); /* 每行最多6个 */
+    flex: 1 1 calc(16.66% - 10px);
     max-width: calc(16.66% - 10px);
   }
 
@@ -2435,20 +1663,18 @@ onUnmounted(() => {
     min-height: 120px;
   }
 
-  /* 小屏幕下未分配区域的调整 */
   .unassigned-section {
-    flex: 0 0 35%; /* 减少未分配区域高度 */
+    flex: 0 0 35%;
   }
 
   .selection-areas-section {
-    flex: 0 0 65%; /* 增加选区区域高度 */
+    flex: 0 0 65%;
   }
 
-  /* 小屏幕下幼儿项的调整 */
   .child-item {
-    flex: 1 1 calc(20% - 10px); /* 每行最多5个 */
+    flex: 1 1 calc(20% - 10px);
     max-width: calc(20% - 10px);
-    min-width: 70px; /* 确保最小宽度 */
+    min-width: 70px;
     padding: 6px;
   }
 
@@ -2459,9 +1685,9 @@ onUnmounted(() => {
 
 @media (max-width: 576px) {
   .child-item {
-    flex: 1 1 calc(25% - 10px); /* 每行最多4个 */
+    flex: 1 1 calc(25% - 10px);
     max-width: calc(25% - 10px);
-    min-width: 65px; /* 确保最小宽度 */
+    min-width: 65px;
     padding: 5px;
   }
 
@@ -2473,13 +1699,12 @@ onUnmounted(() => {
     min-height: 110px;
   }
 
-  /* 小屏幕下未分配区域的进一步调整 */
   .unassigned-section {
-    flex: 0 0 30%; /* 进一步减少未分配区域高度 */
+    flex: 0 0 30%;
   }
 
   .selection-areas-section {
-    flex: 0 0 70%; /* 增加选区区域高度 */
+    flex: 0 0 70%;
   }
 
   .child-name {
@@ -2489,9 +1714,9 @@ onUnmounted(() => {
 
 @media (max-width: 400px) {
   .child-item {
-    flex: 1 1 calc(33.33% - 10px); /* 每行最多3个 */
+    flex: 1 1 calc(33.33% - 10px);
     max-width: calc(33.33% - 10px);
-    min-width: 60px; /* 确保最小宽度 */
+    min-width: 60px;
     padding: 4px;
   }
 
@@ -2510,11 +1735,11 @@ onUnmounted(() => {
 
 /* 全屏模式下的自适应调整 */
 .selection-operation-container:fullscreen .unassigned-section {
-  flex: 0 0 40%; /* 全屏下保持40%高度 */
+  flex: 0 0 40%;
 }
 
 .selection-operation-container:fullscreen .selection-areas-section {
-  flex: 0 0 60%; /* 全屏下保持60%高度 */
+  flex: 0 0 60%;
 }
 
 /* 添加触摸反馈效果样式 */
@@ -2545,9 +1770,9 @@ onUnmounted(() => {
 .child-item {
   transition: transform 0.2s ease, box-shadow 0.2s ease;
   cursor: grab;
-  touch-action: none; /* 防止触摸时的默认滚动行为 */
-  min-height: 80px; /* 增加最小高度以适应手指操作 */
-  min-width: 80px; /* 增加最小宽度以适应手指操作 */
+  touch-action: none;
+  min-height: 80px;
+  min-width: 80px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -2572,13 +1797,11 @@ onUnmounted(() => {
     margin-top: 8px;
   }
 
-  /* 增加选区区域的触摸友好性 */
   .selection-area {
     min-height: 180px;
     min-width: 180px;
   }
 
-  /* 增加拖拽区域的触摸友好性 */
   .unassigned-area {
     min-height: 200px;
   }
@@ -2781,45 +2004,27 @@ onUnmounted(() => {
   position: relative;
   z-index: 1;
   min-height: 0;
-  overflow-y: auto;
   padding: 5px;
-  max-height: 100%;
-}
-
-/* 修复在小屏幕和全屏模式下未分配幼儿区域自适应问题 */
-.unassigned-area {
-  border: 2px dashed rgba(255, 255, 255, 0.2);
-  border-radius: 8px;
-  padding: 10px;
-  flex: 1;
-  min-height: 0;
-  transition: all 0.3s ease;
-  background: rgba(30, 30, 46, 0.5);
-  backdrop-filter: blur(5px);
-  overflow-y: auto; /* 添加滚动条 */
-  display: flex;
-  flex-direction: column;
-  position: relative;
+  overflow: hidden;
 }
 
 /* 小屏幕和全屏模式下的优化 */
 @media (max-width: 768px), (display-mode: fullscreen) {
   .unassigned-area {
-    overflow-y: auto; /* 确保在小屏幕下可以滚动 */
-    padding: 8px; /* 调整内边距 */
+    overflow: hidden;
+    padding: 8px;
   }
 
   .children-list {
-    overflow-y: auto; /* 确保内容可以滚动 */
-    max-height: 100%; /* 限制最大高度 */
-    padding: 5px; /* 添加内边距 */
+    overflow: hidden;
+    padding: 5px;
   }
 
   .child-item {
-    flex: 1 1 calc(20% - 10px); /* 小屏幕下每行最多5个 */
-    min-width: 60px; /* 确保最小宽度 */
-    min-height: 70px; /* 调整最小高度 */
-    padding: 5px; /* 调整内边距 */
+    flex: 1 1 calc(20% - 10px);
+    min-width: 60px;
+    min-height: 70px;
+    padding: 5px;
   }
 
   .child-avatar {
@@ -2835,11 +2040,11 @@ onUnmounted(() => {
 
 /* 全屏模式下的优化 */
 .selection-operation-container:fullscreen .unassigned-area {
-  overflow-y: auto;
+  overflow: hidden;
 }
 
 .selection-operation-container:fullscreen .children-list {
-  overflow-y: auto;
-  max-height: 100%;
+  overflow: hidden;
+  padding: 5px;
 }
 </style>
