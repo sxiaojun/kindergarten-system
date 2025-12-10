@@ -213,8 +213,8 @@ const getRandomStartPosition = (axis) => {
 // 计算未分配幼儿
 const unassignedChildren = computed(() => {
   const assignedIds = assignedChildren.value
-    .filter(item => item && item.child_id)
-    .map(item => item.child_id)
+    .filter(item => item && item.child)
+    .map(item => item.child)
   return allChildren.value.filter(child => !assignedIds.includes(child.id))
 })
 
@@ -320,12 +320,12 @@ const updateSelectionAreaWidth = () => {
 }
 
 // 根据选区ID获取已分配幼儿
-const getChildrenByArea = (areaId) => {
-  const assignedChildIds = assignedChildren.value
-    .filter(record => record && record.selection_area_id === areaId)
-    .map(record => record.child_id)
-  return allChildren.value.filter(child => assignedChildIds.includes(child.id))
-}
+// const getChildrenByArea = (areaId) => {
+//   const assignedChildIds = assignedChildren.value
+//     .filter(record => record && record.selection_area_id === areaId)
+//     .map(record => record.child)
+//   return allChildren.value.filter(child => assignedChildIds.includes(child.id))
+// }
 
 // 创建拖拽轨迹效果
 const createDragTrail = (x, y) => {
@@ -590,7 +590,7 @@ const handleDragLeave = (areaType) => {
 const handleDropToSource = async () => {
   if (!dragData.value || dragData.value.type !== 'child') return
   const child = dragData.value.data
-  const record = assignedChildren.value.find(r => r.child_id === child.id)
+  const record = assignedChildren.value.find(r => r.child === child.id)
   if (record) {
     try {
       await deleteSelectionRecord(record.id)
@@ -615,11 +615,11 @@ const handleDropToArea = async (areaId) => {
     return
   }
 
-  const currentCount = getChildrenByArea(targetAreaId).length
-  if (currentCount >= currentArea.capacity) {
-    showFullscreenMessage('warning', '该选区人数已满')
-    return
-  }
+  // const currentCount = getChildrenByArea(targetAreaId).length
+  // if (currentCount >= currentArea.capacity) {
+  //   showFullscreenMessage('warning', '该选区人数已满')
+  //   return
+  // }
 
   const targetArea = document.querySelector(`[data-area-id="${targetAreaId}"]`)
   if (targetArea) {
