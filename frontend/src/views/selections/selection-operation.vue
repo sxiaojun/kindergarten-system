@@ -65,9 +65,9 @@
             @touchend="handleTouchEnd"
             @touchcancel="handleTouchCancel"
           >
-            <div class="children-list" ref="childrenListRef">
+            <div class="children-grid" ref="childrenGridRef">
               <div
-                v-for="child in unassignedChildren"
+                v-for="child in allChildren"
                 :key="child.id"
                 class="child-item"
                 draggable="true"
@@ -79,13 +79,20 @@
                 @touchcancel="handleTouchCancel"
               >
                 <div class="child-avatar-wrapper">
-                  <div class="child-avatar">
-                    <el-avatar :size="childAvatarSize" :src="child.avatar">{{ child.name.charAt(0) }}</el-avatar>
-                  </div>
-                  <!-- 添加选区历史标记 -->
+                  <el-avatar
+                    :size="avatarSize"
+                    :src="child.avatar"
+                    class="child-avatar"
+                  >
+                    {{ child.name.charAt(0) }}
+                  </el-avatar>
+
+                  <!-- 选区历史标记 -->
                   <div v-if="getChildHasHistory(child.id)" class="selection-history-marker">选</div>
+
+                  <!-- 幼儿姓名 -->
+                  <div class="child-name">{{ child.name }}</div>
                 </div>
-                <div class="child-name">{{ child.name }}</div>
               </div>
             </div>
           </div>
@@ -185,7 +192,7 @@ const loading = ref(false)
 const selectedClassId = ref('')
 const selectKey = ref(0)
 const containerRef = ref(null)
-const childrenListRef = ref(null)
+const childrenGridRef = ref(null)
 const formModel = reactive({ selectedClassId: '' })
 const classList = ref([])
 const selectionAreas = ref([])
@@ -210,6 +217,11 @@ const getRandomStartPosition = (axis) => {
   return (Math.random() * 400 - 200) + 'px'
 }
 
+// 判断幼儿是否曾经有过选区记录
+const getChildHasHistory = (childId) => {
+  return assignedChildren.value.some(record => record.child === childId);
+}
+
 // 计算未分配幼儿
 const unassignedChildren = computed(() => {
   const assignedIds = assignedChildren.value
@@ -218,22 +230,34 @@ const unassignedChildren = computed(() => {
   return allChildren.value.filter(child => !assignedIds.includes(child.id))
 })
 
-// 判断幼儿是否曾经有过选区记录
-const getChildHasHistory = (childId) => {
-  return assignedChildren.value.some(record => record.child === childId);
-}
-
 const totalChildren = computed(() => allChildren.value.length)
 const assignedTodayCount = computed(() => assignedChildren.value.length)
 const unassignedCount = computed(() => totalChildren.value - assignedTodayCount.value)
 
 // 动态计算幼儿头像大小
-const childAvatarSize = computed(() => {
-  const screenWidth = window.innerWidth
-  if (screenWidth < 480) return 32 // 小屏幕
-  if (screenWidth < 768) return 40 // 中等屏幕
-  if (screenWidth < 1024) return 44 // 大屏幕
-  return 48 // 超大屏幕
+const avatarSize = computed(() => {
+  if (!childrenGridRef.value || allChildren.value.length === 0) return 60
+
+  const container = childrenGridRef.value
+  const containerWidth = container.clientWidth
+  const containerHeight = container.clientHeight
+
+  if (containerWidth <= 0 || containerHeight <= 0) return 60
+
+  // 计算每行最多可显示的项目数
+  const maxItemsPerRow = Math.max(1, Math.floor(containerWidth / 100))
+  const maxRows = Math.max(1, Math.ceil(allChildren.value.length / maxItemsPerRow))
+
+  // 计算每行实际需要的项目数
+  const itemsPerRow = Math.ceil(Math.sqrt(allChildren.value.length))
+
+  // 计算头像大小，确保所有项目都能在容器内显示
+  const horizontalSize = Math.floor(containerWidth / itemsPerRow * 0.85)
+  const verticalSize = Math.floor(containerHeight / maxRows * 0.7) // 预留空间给姓名
+
+  // 取较小值作为头像大小，并设置最小和最大限制
+  const size = Math.min(horizontalSize, verticalSize)
+  return Math.max(Math.min(size, 120), 30)
 })
 
 // 获取班级列表
@@ -318,14 +342,6 @@ const updateSelectionAreaWidth = () => {
     })
   })
 }
-
-// 根据选区ID获取已分配幼儿
-// const getChildrenByArea = (areaId) => {
-//   const assignedChildIds = assignedChildren.value
-//     .filter(record => record && record.selection_area_id === areaId)
-//     .map(record => record.child)
-//   return allChildren.value.filter(child => assignedChildIds.includes(child.id))
-// }
 
 // 创建拖拽轨迹效果
 const createDragTrail = (x, y) => {
@@ -614,12 +630,6 @@ const handleDropToArea = async (areaId) => {
     showFullscreenMessage('error', '选区不存在')
     return
   }
-
-  // const currentCount = getChildrenByArea(targetAreaId).length
-  // if (currentCount >= currentArea.capacity) {
-  //   showFullscreenMessage('warning', '该选区人数已满')
-  //   return
-  // }
 
   const targetArea = document.querySelector(`[data-area-id="${targetAreaId}"]`)
   if (targetArea) {
@@ -935,9 +945,10 @@ onUnmounted(() => {
   position: relative;
 }
 
-.children-list {
-  display: flex;
-  flex-wrap: wrap;
+.children-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  grid-auto-rows: minmax(100px, auto);
   gap: 10px;
   flex: 1;
   align-content: flex-start;
@@ -946,6 +957,9 @@ onUnmounted(() => {
   min-height: 0;
   padding: 5px;
   overflow: hidden;
+  width: 100%;
+  height: 100%;
+  align-items: stretch;
 }
 
 /* 悬停时的视觉效果 */
@@ -964,17 +978,21 @@ onUnmounted(() => {
   -moz-user-select: none;
   -ms-user-select: none;
   user-select: none;
-  background: rgba(30, 30, 46, 0.7);
-  border-radius: 8px;
-  padding: 8px;
-  min-height: 80px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   text-align: center;
-  flex: 0 0 auto;
-  min-width: 80px;
+  min-width: 0;
+  min-height: 0;
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
 }
 
 .child-item:hover {
@@ -1606,11 +1624,6 @@ onUnmounted(() => {
 
 /* 响应式设计 */
 @media (max-width: 1400px) {
-  .child-item {
-    flex: 1 1 calc(12.5% - 10px);
-    max-width: calc(12.5% - 10px);
-  }
-
   .selection-areas {
     gap: 18px;
   }
@@ -1621,11 +1634,6 @@ onUnmounted(() => {
 }
 
 @media (max-width: 1200px) {
-  .child-item {
-    flex: 1 1 calc(14.28% - 10px);
-    max-width: calc(14.28% - 10px);
-  }
-
   .selection-areas {
     gap: 16px;
   }
@@ -1636,11 +1644,6 @@ onUnmounted(() => {
 }
 
 @media (max-width: 992px) {
-  .child-item {
-    flex: 1 1 calc(16.66% - 10px);
-    max-width: calc(16.66% - 10px);
-  }
-
   .selection-areas {
     gap: 14px;
   }
@@ -1670,27 +1673,9 @@ onUnmounted(() => {
   .selection-areas-section {
     flex: 0 0 65%;
   }
-
-  .child-item {
-    flex: 1 1 calc(20% - 10px);
-    max-width: calc(20% - 10px);
-    min-width: 70px;
-    padding: 6px;
-  }
-
-  .child-name {
-    font-size: 12px;
-  }
 }
 
 @media (max-width: 576px) {
-  .child-item {
-    flex: 1 1 calc(25% - 10px);
-    max-width: calc(25% - 10px);
-    min-width: 65px;
-    padding: 5px;
-  }
-
   .selection-areas {
     gap: 10px;
   }
@@ -1706,30 +1691,15 @@ onUnmounted(() => {
   .selection-areas-section {
     flex: 0 0 70%;
   }
-
-  .child-name {
-    font-size: 11px;
-  }
 }
 
 @media (max-width: 400px) {
-  .child-item {
-    flex: 1 1 calc(33.33% - 10px);
-    max-width: calc(33.33% - 10px);
-    min-width: 60px;
-    padding: 4px;
-  }
-
   .selection-areas {
     gap: 8px;
   }
 
   .selection-area {
     min-height: 100px;
-  }
-
-  .child-name {
-    font-size: 10px;
   }
 }
 
@@ -1771,8 +1741,6 @@ onUnmounted(() => {
   transition: transform 0.2s ease, box-shadow 0.2s ease;
   cursor: grab;
   touch-action: none;
-  min-height: 80px;
-  min-width: 80px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1782,21 +1750,6 @@ onUnmounted(() => {
 
 /* 平板设备上的特殊样式 */
 @media (max-width: 1024px) and (pointer: coarse) {
-  .child-item {
-    min-height: 90px;
-    min-width: 90px;
-    padding: 10px;
-  }
-
-  .child-avatar {
-    transform: scale(1.2);
-  }
-
-  .child-name {
-    font-size: 16px;
-    margin-top: 8px;
-  }
-
   .selection-area {
     min-height: 180px;
     min-width: 180px;
@@ -1817,55 +1770,6 @@ onUnmounted(() => {
   .child-item:active {
     transform: scale(1.1);
     box-shadow: 0 8px 25px rgba(0, 0, 0, 0.5);
-  }
-}
-
-/* 动态调整幼儿头像大小的响应式样式 */
-.child-avatar {
-  transition: width 0.3s ease, height 0.3s ease;
-}
-
-@media (max-width: 480px) {
-  .child-avatar {
-    width: 32px !important;
-    height: 32px !important;
-  }
-
-  .child-name {
-    font-size: 12px;
-  }
-}
-
-@media (min-width: 481px) and (max-width: 768px) {
-  .child-avatar {
-    width: 40px !important;
-    height: 40px !important;
-  }
-
-  .child-name {
-    font-size: 14px;
-  }
-}
-
-@media (min-width: 769px) and (max-width: 1024px) {
-  .child-avatar {
-    width: 44px !important;
-    height: 44px !important;
-  }
-
-  .child-name {
-    font-size: 16px;
-  }
-}
-
-@media (min-width: 1025px) {
-  .child-avatar {
-    width: 48px !important;
-    height: 48px !important;
-  }
-
-  .child-name {
-    font-size: 18px;
   }
 }
 
@@ -1906,14 +1810,20 @@ onUnmounted(() => {
 /* 幼儿头像包装器 */
 .child-avatar-wrapper {
   position: relative;
-  display: inline-block;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
 }
 
-/* 选区历史标记 */
+/* 选区历史标记 - 放在右上角 */
 .selection-history-marker {
   position: absolute;
-  top: -5px;
-  right: -5px;
+  top: 2px;
+  right: 2px;
   background-color: #409EFF;
   color: white;
   border-radius: 50%;
@@ -1926,125 +1836,96 @@ onUnmounted(() => {
   font-weight: bold;
   box-shadow: 0 0 2px rgba(0, 0, 0, 0.5);
   z-index: 2;
+  line-height: 1;
+  padding: 0;
+  min-width: 18px;
 }
 
-/* 确保幼儿头像在全屏模式下正常显示 */
-.selection-operation-container:fullscreen .child-avatar {
+/* 幼儿姓名 - 放在左下角 */
+.child-name {
+  position: absolute;
+  bottom: 2px;
+  left: 2px;
+  background-color: rgba(0, 0, 0, 0.7);
+  color: white;
+  font-size: 12px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  z-index: 2;
+  white-space: nowrap;
+  max-width: calc(100% - 25px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.2;
+}
+
+/* 幼儿头像自适应 */
+.child-avatar {
   display: block !important;
-  width: auto !important;
-  height: auto !important;
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
 }
 
-.selection-operation-container:fullscreen .child-avatar .el-avatar {
-  display: block !important;
+/* 确保网格项目填满空间 */
+.children-grid {
+  display: grid !important;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)) !important;
+  grid-auto-rows: minmax(100px, auto) !important;
+  gap: 10px !important;
+  flex: 1 !important;
+  align-content: flex-start !important;
+  position: relative !important;
+  z-index: 1 !important;
+  min-height: 0 !important;
+  padding: 5px !important;
+  overflow: hidden !important;
+  width: 100% !important;
+  height: 100% !important;
+  align-items: stretch !important;
 }
 
-/* 确保彩虹跟随效果在全屏模式下正常显示 */
-.selection-operation-container:fullscreen .drag-trail {
-  position: fixed !important;
-  z-index: 1000000 !important;
+/* 修正幼儿项样式 */
+.child-item {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  text-align: center !important;
+  box-sizing: border-box !important;
+  width: 100% !important;
+  height: 100% !important;
+  overflow: hidden !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  position: relative !important;
 }
 
-/* 确保触摸拖拽预览在全屏模式下正常显示 */
-.selection-operation-container:fullscreen .touch-drag-preview {
-  position: fixed !important;
-  z-index: 9999 !important;
-  pointer-events: none !important;
-}
-
-/* 修复全屏闪烁问题 */
-.selection-operation-container:fullscreen .child-item {
-  -webkit-user-select: none;
-  -moz-user-select: none;
-  -ms-user-select: none;
-  user-select: none;
-}
-
-.selection-operation-container:fullscreen .child-item * {
-  -webkit-user-select: none;
-  -moz-user-select: none;
-  -ms-user-select: none;
-  user-select: none;
-}
-
-/* 拖拽轨迹容器 */
-.drag-trail-container {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-  z-index: 999999;
-  overflow: visible;
-}
-
-/* 确保全屏模式下头像正常显示 */
-.selection-operation-container:fullscreen .child-avatar {
+/* 确保头像容器完全填充 */
+.child-avatar-wrapper {
+  width: 100% !important;
+  height: 100% !important;
+  position: relative !important;
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
-  width: auto !important;
-  height: auto !important;
+  overflow: hidden !important;
+  border-radius: 8px !important;
 }
 
-.selection-operation-container:fullscreen .child-avatar .el-avatar {
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
+/* 确保头像完全填充容器 */
+.child-avatar {
+  width: 100% !important;
+  height: 100% !important;
+  border-radius: 8px !important;
+  object-fit: cover !important;
 }
 
-/* 修复未分配幼儿区域自适应问题 */
-.children-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  flex: 1;
-  align-content: flex-start;
-  position: relative;
-  z-index: 1;
-  min-height: 0;
-  padding: 5px;
-  overflow: hidden;
-}
-
-/* 小屏幕和全屏模式下的优化 */
-@media (max-width: 768px), (display-mode: fullscreen) {
-  .unassigned-area {
-    overflow: hidden;
-    padding: 8px;
-  }
-
-  .children-list {
-    overflow: hidden;
-    padding: 5px;
-  }
-
-  .child-item {
-    flex: 1 1 calc(20% - 10px);
-    min-width: 60px;
-    min-height: 70px;
-    padding: 5px;
-  }
-
-  .child-avatar {
-    width: 28px !important;
-    height: 28px !important;
-  }
-
-  .child-name {
-    font-size: 10px;
-    line-height: 1.2;
-  }
-}
-
-/* 全屏模式下的优化 */
-.selection-operation-container:fullscreen .unassigned-area {
-  overflow: hidden;
-}
-
-.selection-operation-container:fullscreen .children-list {
-  overflow: hidden;
-  padding: 5px;
+/* 修正头像大小 */
+.child-avatar .el-avatar {
+  width: 100% !important;
+  height: 100% !important;
+  border-radius: 8px !important;
+  object-fit: cover !important;
 }
 </style>
