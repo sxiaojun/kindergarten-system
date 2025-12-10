@@ -237,26 +237,24 @@ const unassignedCount = computed(() => totalChildren.value - assignedTodayCount.
 // 动态计算幼儿头像大小
 const avatarSize = computed(() => {
   if (!childrenGridRef.value || allChildren.value.length === 0) return 60
-
+  
   const container = childrenGridRef.value
   const containerWidth = container.clientWidth
   const containerHeight = container.clientHeight
-
+  
   if (containerWidth <= 0 || containerHeight <= 0) return 60
-
+  
   // 计算每行最多可显示的项目数
-  const maxItemsPerRow = Math.max(1, Math.floor(containerWidth / 100))
-  const maxRows = Math.max(1, Math.ceil(allChildren.value.length / maxItemsPerRow))
-
-  // 计算每行实际需要的项目数
-  const itemsPerRow = Math.ceil(Math.sqrt(allChildren.value.length))
-
+  const minItemSize = 60 // 最小项目尺寸
+  const maxItemsPerRow = Math.max(1, Math.floor(containerWidth / minItemSize))
+  
+  // 在小屏幕上使用更小的头像
+  if (window.innerWidth <= 768) {
+    return Math.max(40, Math.floor(containerWidth / maxItemsPerRow * 0.8))
+  }
+  
   // 计算头像大小，确保所有项目都能在容器内显示
-  const horizontalSize = Math.floor(containerWidth / itemsPerRow * 0.85)
-  const verticalSize = Math.floor(containerHeight / maxRows * 0.7) // 预留空间给姓名
-
-  // 取较小值作为头像大小，并设置最小和最大限制
-  const size = Math.min(horizontalSize, verticalSize)
+  const size = Math.floor(containerWidth / maxItemsPerRow * 0.85)
   return Math.max(Math.min(size, 120), 30)
 })
 
@@ -921,13 +919,9 @@ onUnmounted(() => {
 
 .unassigned-section {
   flex: 0 0 40%;
-}
-
-.selection-areas-section {
-  flex: 0 0 60%;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
 }
 
 .unassigned-area {
@@ -939,7 +933,6 @@ onUnmounted(() => {
   transition: all 0.3s ease;
   background: rgba(30, 30, 46, 0.5);
   backdrop-filter: blur(5px);
-  overflow: hidden;
   display: flex;
   flex-direction: column;
   position: relative;
@@ -947,19 +940,132 @@ onUnmounted(() => {
 
 .children-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
-  grid-auto-rows: minmax(100px, auto);
-  gap: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+  grid-auto-rows: minmax(80px, auto);
+  gap: 8px;
   flex: 1;
   align-content: flex-start;
   position: relative;
   z-index: 1;
   min-height: 0;
   padding: 5px;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
   width: 100%;
-  height: 100%;
   align-items: stretch;
+}
+
+/* 添加滚动条样式 */
+.children-grid::-webkit-scrollbar {
+  width: 12px;
+}
+
+.children-grid::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+}
+
+.children-grid::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.4);
+  border-radius: 6px;
+}
+
+.children-grid::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.6);
+}
+
+/* Firefox scrollbar */
+.children-grid {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.4) rgba(255, 255, 255, 0.1);
+}
+
+/* 平板和触摸设备上的滚动条 */
+@media (max-width: 1024px) and (pointer: coarse) {
+  .children-grid::-webkit-scrollbar {
+    width: 16px;
+  }
+
+  .children-grid::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+  }
+
+  .children-grid::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.5);
+    border-radius: 8px;
+  }
+
+  .children-grid::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.7);
+  }
+}
+
+/* 小屏幕设备上的滚动条 */
+@media (max-width: 768px) {
+  .children-grid::-webkit-scrollbar {
+    width: 14px;
+  }
+
+  .children-grid::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 7px;
+  }
+
+  .children-grid::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.5);
+    border-radius: 7px;
+  }
+
+  .children-grid::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.7);
+  }
+}
+
+/* 平板和触摸设备特殊处理 */
+@media (max-width: 1024px) and (pointer: coarse) {
+  .unassigned-area {
+    min-height: 200px;
+    padding: 5px;
+  }
+  
+  .children-grid {
+    padding: 5px;
+    /* 关键修复：增加底部空间确保最后一行幼儿完整显示 */
+    padding-bottom: 30px;
+    /* 添加 scroll-padding 确保滚动时最后一行可见 */
+    scroll-padding-bottom: 30px;
+    /* 优化触摸设备滚动 */
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+/* 小屏幕优化 */
+@media (max-width: 768px) {
+  .unassigned-area {
+    padding: 5px;
+  }
+  
+  .children-grid {
+    grid-template-columns: repeat(auto-fill, minmax(65px, 1fr));
+    grid-auto-rows: minmax(65px, auto);
+    gap: 6px;
+    padding: 4px;
+    padding-bottom: 25px;
+    scroll-padding-bottom: 25px;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+@media (max-width: 480px) {
+  .children-grid {
+    grid-template-columns: repeat(auto-fill, minmax(55px, 1fr));
+    grid-auto-rows: minmax(55px, auto);
+    gap: 5px;
+    padding: 3px;
+    padding-bottom: 20px;
+    scroll-padding-bottom: 20px;
+  }
 }
 
 /* 悬停时的视觉效果 */
@@ -1879,10 +1985,14 @@ onUnmounted(() => {
   z-index: 1 !important;
   min-height: 0 !important;
   padding: 5px !important;
-  overflow: hidden !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
   width: 100% !important;
-  height: 100% !important;
   align-items: stretch !important;
+  /* 添加 scroll-padding 确保滚动时最后一行可见 */
+  scroll-padding-bottom: 20px !important;
+  /* 优化触摸设备滚动 */
+  -webkit-overflow-scrolling: touch !important;
 }
 
 /* 修正幼儿项样式 */
