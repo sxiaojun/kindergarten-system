@@ -141,12 +141,11 @@
         <el-form-item label="选区图片">
           <el-upload
             class="avatar-uploader"
-            :action="uploadUrl"
+            :auto-upload="false"
             :show-file-list="false"
-            :on-success="handleAvatarSuccess"
             :before-upload="beforeAvatarUpload"
-            :data="uploadData"
-            :headers="uploadHeaders"
+            :on-change="handleImageChange"
+            :on-remove="handleImageRemove"
           >
             <img v-if="formData.image && typeof formData.image === 'string'" :src="formData.image" class="avatar" />
             <el-icon v-else-if="!formData.image" class="avatar-uploader-icon"><Plus /></el-icon>
@@ -182,13 +181,6 @@ const dialogTitle = ref('')
 const formRef = ref(null)
 const selectionAreasData = ref([])
 const classList = ref([])
-
-// 上传相关
-const uploadUrl = `${import.meta.env.VITE_API_BASE_URL || ''}/selections/selection-areas/`
-const uploadData = ref({})
-const uploadHeaders = {
-  'Authorization': `Bearer ${localStorage.getItem('token')}`
-}
 
 // 查询条件
 const searchForm = reactive({
@@ -372,6 +364,9 @@ const resetForm = () => {
   formData.class_id = ''
   formData.max_selections = 10
   formData.description = ''
+  if (formData.image && typeof formData.image === 'string' && formData.image.startsWith('blob:')) {
+    URL.revokeObjectURL(formData.image)
+  }
   formData.image = ''
   originalImageFile.value = null // 同时重置文件引用
   if (formRef.value) {
@@ -411,11 +406,7 @@ const handleSubmit = async () => {
         max_selections: formData.max_selections,
         description: formData.description
       }
-      
-      // 如果有图片URL，则也添加到数据中
-      if (formData.image) {
-        data.image = formData.image;
-      }
+      // 注意：非 FormData 情况下不要传 image 字段，避免把 URL 当作文件传给后端
     }
     
     // 执行创建或更新操作
@@ -438,22 +429,6 @@ const handleSubmit = async () => {
   }
 }
 
-// 处理图片上传成功
-const handleAvatarSuccess = (response, uploadFile) => {
-  // 保存文件引用以便后续提交
-  originalImageFile.value = uploadFile.raw
-  
-  // 更新表单中的图片字段
-  if (response && response.data) {
-    formData.image = response.data.image
-  } else {
-    // 如果响应格式不符合预期，直接使用文件URL
-    formData.image = URL.createObjectURL(uploadFile.raw)
-  }
-  
-  ElMessage.success('图片上传成功')
-}
-
 // 上传前检查
 const beforeAvatarUpload = (rawFile) => {
   // 检查文件类型
@@ -467,6 +442,31 @@ const beforeAvatarUpload = (rawFile) => {
     return false
   }
   return true
+}
+
+// 选择图片后本地预览，不直接上传
+const handleImageChange = (uploadFile) => {
+  const rawFile = uploadFile && uploadFile.raw ? uploadFile.raw : null
+  if (!rawFile) return
+  if (!beforeAvatarUpload(rawFile)) {
+    return
+  }
+  // 释放上一次的 blob 预览
+  if (formData.image && typeof formData.image === 'string' && formData.image.startsWith('blob:')) {
+    URL.revokeObjectURL(formData.image)
+  }
+  originalImageFile.value = rawFile
+  formData.image = URL.createObjectURL(rawFile)
+  ElMessage.success('已选择图片')
+}
+
+// 移除已选择的图片
+const handleImageRemove = () => {
+  if (formData.image && typeof formData.image === 'string' && formData.image.startsWith('blob:')) {
+    URL.revokeObjectURL(formData.image)
+  }
+  originalImageFile.value = null
+  formData.image = ''
 }
 
 // 保存原始图片文件引用
