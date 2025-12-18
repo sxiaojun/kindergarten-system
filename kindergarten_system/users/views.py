@@ -41,11 +41,28 @@ def generate_captcha():
         width, height = 120, 40
         # 创建图像
         image = Image.new('RGB', (width, height), color=(255, 255, 255))
-        # 创建字体对象
-        try:
-            font = ImageFont.truetype('arial.ttf', 24)
-        except:
+        
+        # 创建字体对象，优先使用系统中已安装的字体
+        font = None
+        font_paths = [
+            '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',  # Debian/Ubuntu系统中的DejaVu字体
+            '/usr/share/fonts/dejavu/DejaVuSans.ttf',           # 其他Linux发行版中的DejaVu字体
+            'arial.ttf',                                        # Windows系统中的Arial字体
+            '/System/Library/Fonts/Arial.ttf'                   # macOS系统中的Arial字体
+        ]
+        
+        # 尝试加载可用字体
+        for font_path in font_paths:
+            try:
+                font = ImageFont.truetype(font_path, 24)
+                break
+            except:
+                continue
+        
+        # 如果所有字体都加载失败，使用默认字体
+        if font is None:
             font = ImageFont.load_default()
+        
         # 创建绘图对象
         draw = ImageDraw.Draw(image)
         
