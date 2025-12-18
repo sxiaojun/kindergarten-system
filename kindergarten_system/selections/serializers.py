@@ -16,15 +16,27 @@ class SelectionAreaSerializer(serializers.ModelSerializer):
     kindergarten_name = serializers.CharField(source='class_info.kindergarten.name', read_only=True)
     class_id = serializers.IntegerField(write_only=True, required=False)
     image = serializers.ImageField(required=False, allow_null=True)
+    current_selections = serializers.SerializerMethodField()
     
     class Meta:
         model = SelectionArea
         fields = [
             'id', 'name', 'class_id', 'class_name', 'kindergarten_name',
-            'max_selections', 'description', 'image', 'created_at', 'updated_at'
+            'max_selections', 'description', 'image', 'created_at', 'updated_at', 'current_selections'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at', 'class_name', 'kindergarten_name']
-    
+
+    def get_current_selections(self, obj):
+        """
+        获取该选区当天已选择的人数
+        """
+        today = timezone.now().date()
+        return SelectionRecord.objects.filter(
+            selection_area=obj,
+            date=today,
+            is_active=True
+        ).count()
+
     def validate_class_id(self, value):
         """
         验证班级ID的有效性

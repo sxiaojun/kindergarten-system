@@ -162,6 +162,8 @@
                   </template>
                 </el-image>
                 <div class="area-name-overlay">{{ area.name }}</div>
+                <div class="selection-count-overlay">已选：{{ area.current_selections }} / 最大：{{ area.max_selections
+                }}</div>
               </div>
             </div>
           </div>
@@ -608,6 +610,11 @@ const handleDropToSource = async () => {
   if (record) {
     try {
       await deleteSelectionRecord(record.id)
+      // 实时更新前端计数值
+      const originalArea = selectionAreas.value.find(a => a.id === record.selection_area)
+      if (originalArea) {
+        originalArea.current_selections = Math.max(0, originalArea.current_selections - 1)
+      }
       assignedChildren.value = assignedChildren.value.filter(r => r.id !== record.id)
       showFullscreenMessage('success', `${child.name}已取消分配`)
     } catch (error) {
@@ -628,6 +635,11 @@ const handleDropToArea = async (areaId) => {
     showFullscreenMessage('error', '选区不存在')
     return
   }
+  // 增加选区人数校验
+  if (currentArea.current_selections == currentArea.max_selections) {
+      showFullscreenMessage('error', `选区 "${currentArea.name}" 人数已满`)
+      return
+  }
 
   const targetArea = document.querySelector(`[data-area-id="${targetAreaId}"]`)
   if (targetArea) {
@@ -639,6 +651,7 @@ const handleDropToArea = async (areaId) => {
   const selectTime = new Date().toISOString()
 
   const existingRecord = assignedChildren.value.find(r => r && r.child === child.id)
+  const originalAreaId = existingRecord ? existingRecord.selection_area : null
   try {
     if (existingRecord) {
       await updateSelectionRecord(existingRecord.id, {selection_area_id: targetAreaId, select_time: selectTime})
@@ -651,6 +664,12 @@ const handleDropToArea = async (areaId) => {
         }
       }
       showFullscreenMessage('success', `${child.name}已重新分配到${currentArea.name}`)
+      // 更新前后选区的计数值
+      const originalArea = selectionAreas.value.find(a => a.id === originalAreaId)
+      if (originalArea) {
+        originalArea.current_selections = Math.max(0, originalArea.current_selections - 1)
+      }
+      currentArea.current_selections++
     } else {
       const res = await createSelectionRecord({
         child_id: child.id,
@@ -659,6 +678,12 @@ const handleDropToArea = async (areaId) => {
       })
       assignedChildren.value.push(res)
       showFullscreenMessage('success', `${child.name}已分配到${currentArea.name}`)
+      // 更新前后选区的计数值
+      const originalArea = selectionAreas.value.find(a => a.id === originalAreaId)
+      if (originalArea) {
+        originalArea.current_selections = Math.max(0, originalArea.current_selections - 1)
+      }
+      currentArea.current_selections++
     }
   } catch (error) {
     console.error('分配失败:', error)
@@ -2037,5 +2062,16 @@ onUnmounted(() => {
   height: 100% !important;
   border-radius: 8px !important;
   object-fit: cover !important;
+}
+
+.selection-count-overlay {
+  position: absolute;
+  top: 5px;
+  left: 1px;
+  background-color: rgba(0, 0, 0, 0.6);
+  color: white;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 12px;
 }
 </style>
