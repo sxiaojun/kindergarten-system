@@ -21,7 +21,7 @@ class SelectionAreaSerializer(serializers.ModelSerializer):
         model = SelectionArea
         fields = [
             'id', 'name', 'class_id', 'class_name', 'kindergarten_name',
-            'description', 'image', 'created_at', 'updated_at'
+            'max_selections', 'description', 'image', 'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at', 'class_name', 'kindergarten_name']
     

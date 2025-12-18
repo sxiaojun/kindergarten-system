@@ -59,7 +59,8 @@
             <span v-else>暂无图片</span>
           </template>
         </el-table-column>
-        <!-- 已删除最大容量和当前人数列 -->
+        <el-table-column prop="max_selections" label="最大选区数" min-width="100" />
+        <!-- 已删除当前人数列 -->
         <el-table-column prop="description" label="描述" min-width="150" />
         <el-table-column prop="created_at" label="创建时间" width="180" />
         <el-table-column label="操作" width="150" fixed="right">
@@ -116,6 +117,16 @@
               :value="item.id"
             />
           </el-select>
+        </el-form-item>
+        
+        <el-form-item label="最大选区数" prop="max_selections">
+          <el-input-number 
+            v-model="formData.max_selections" 
+            :min="1" 
+            :max="100" 
+            controls-position="right" 
+            style="width: 100%"
+          />
         </el-form-item>
 
         <el-form-item label="描述" prop="description">
@@ -197,6 +208,7 @@ const formData = reactive({
   id: '',
   name: '',
   class_id: '',
+  max_selections: 10,
   description: '',
   image: ''
 })
@@ -210,6 +222,9 @@ const formRules = reactive({
   class_id: [
     { required: true, message: '请选择所属班级', trigger: 'change' }
   ],
+  max_selections: [
+    { required: true, message: '请输入最大选区数', trigger: 'blur' }
+  ]
 
 })
 
@@ -300,6 +315,7 @@ const handleCreate = () => {
   formData.id = ''
   formData.name = ''
   formData.class_id = ''
+  formData.max_selections = 10
   formData.description = ''
   formData.image = ''
   dialogVisible.value = true
@@ -318,6 +334,7 @@ const handleEdit = async (row) => {
       formData.name = res.name || ''
       // 现在可以直接从响应中获取class_id
       formData.class_id = res.class_id || ''
+      formData.max_selections = res.max_selections || 10
       formData.description = res.description || ''
       formData.image = res.image || ''
       dialogVisible.value = true
@@ -353,6 +370,7 @@ const resetForm = () => {
   formData.id = ''
   formData.name = ''
   formData.class_id = ''
+  formData.max_selections = 10
   formData.description = ''
   formData.image = ''
   originalImageFile.value = null // 同时重置文件引用
@@ -381,6 +399,7 @@ const handleSubmit = async () => {
       data = new FormData()
       data.append('name', formData.name)
       data.append('class_id', formData.class_id)
+      data.append('max_selections', formData.max_selections)
       data.append('description', formData.description)
       data.append('image', originalImageFile.value) // 使用原始文件对象
       isFormData = true;
@@ -389,6 +408,7 @@ const handleSubmit = async () => {
       data = {
         name: formData.name,
         class_id: formData.class_id,
+        max_selections: formData.max_selections,
         description: formData.description
       }
       
@@ -397,67 +417,65 @@ const handleSubmit = async () => {
         data.image = formData.image;
       }
     }
-
+    
+    // 执行创建或更新操作
     if (formData.id) {
-      // 更新
+      // 更新操作
       await updateSelectionArea(formData.id, data, isFormData)
       ElMessage.success('更新成功')
     } else {
-      // 创建
+      // 创建操作
       await createSelectionArea(data, isFormData)
       ElMessage.success('创建成功')
     }
     
+    // 关闭对话框并刷新列表
     dialogVisible.value = false
     getSelectionAreasList()
   } catch (error) {
-    // 检查是否是重复数据错误
-    if (error.response && error.response.status === 400) {
-      const errorMsg = error.response.data.detail || '选区名称和所属班级不能重复';
-      ElMessage.error(errorMsg);
-    } else {
-      ElMessage.error('操作失败：' + (error.message || '未知错误'))
-    }
     console.error('提交失败:', error)
+    ElMessage.error('提交失败：' + (error.message || '未知错误'))
   }
 }
 
-// 添加一个新的变量来存储原始文件对象
-const originalImageFile = ref(null);
-
-// 图片上传相关方法
+// 处理图片上传成功
 const handleAvatarSuccess = (response, uploadFile) => {
-  // 仅用于前端预览，不调用后端接口
-  if (response && response.image) {
-    formData.image = response.image;
+  // 保存文件引用以便后续提交
+  originalImageFile.value = uploadFile.raw
+  
+  // 更新表单中的图片字段
+  if (response && response.data) {
+    formData.image = response.data.image
   } else {
-    formData.image = URL.createObjectURL(uploadFile.raw);
+    // 如果响应格式不符合预期，直接使用文件URL
+    formData.image = URL.createObjectURL(uploadFile.raw)
   }
-  originalImageFile.value = uploadFile.raw; // 保存原始文件对象用于提交
+  
+  ElMessage.success('图片上传成功')
 }
 
+// 上传前检查
 const beforeAvatarUpload = (rawFile) => {
   // 检查文件类型
-  if (rawFile.type !== 'image/jpeg' && rawFile.type !== 'image/png') {
-    ElMessage.error('图片必须是 JPG 或 PNG 格式!')
+  if (rawFile.type.indexOf('image/') !== 0) {
+    ElMessage.error('图片必须是 JPG/PNG/GIF 格式!')
     return false
   }
   // 检查文件大小 (2MB)
-  if (rawFile.size / 1024 / 1024 > 2) {
+  else if (rawFile.size / 1024 / 1024 > 2) {
     ElMessage.error('图片大小不能超过 2MB!')
     return false
   }
-  
-  // 仅用于前端预览，创建预览URL
-  formData.image = URL.createObjectURL(rawFile);
-  originalImageFile.value = rawFile; // 保存原始文件对象用于提交
-  return false; // 返回 false 阻止自动上传
+  return true
 }
+
+// 保存原始图片文件引用
+const originalImageFile = ref(null)
 
 // 组件挂载时获取数据
 onMounted(() => {
-  getClassList()
   getSelectionAreasList()
+  getClassList()
 })
 </script>
 
@@ -472,17 +490,19 @@ onMounted(() => {
 
 .page-header h2 {
   margin: 0 0 10px 0;
-  font-size: 24px;
   color: #303133;
 }
 
 .page-header p {
   margin: 0;
-  color: #606266;
-  font-size: 14px;
+  color: #909399;
 }
 
 .search-card {
+  margin-bottom: 20px;
+}
+
+.content-card {
   margin-bottom: 20px;
 }
 
@@ -497,25 +517,16 @@ onMounted(() => {
   gap: 10px;
 }
 
+.selection-image {
+  width: 60px;
+  height: 60px;
+  border-radius: 4px;
+}
+
 .pagination-container {
   margin-top: 20px;
   display: flex;
   justify-content: flex-end;
-}
-
-/* 设置搜索输入框固定宽度 */
-.search-card :deep(.el-form-item .el-input) {
-  width: 150px;
-}
-
-.selections-class-select {
-  width: 150px;
-}
-
-.selection-image {
-  width: 80px;
-  height: 80px;
-  border-radius: 6px;
 }
 
 .avatar-uploader .avatar {
@@ -524,24 +535,14 @@ onMounted(() => {
   display: block;
 }
 
-.file-name {
-  width: 120px;
-  height: 120px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px dashed #d9d9d9;
-  border-radius: 6px;
-  font-size: 12px;
-  color: #666;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  padding: 4px;
+.avatar-uploader .file-name {
+  padding: 10px;
+  text-align: center;
+  color: #606266;
 }
 
 .avatar-uploader .el-upload {
-  border: 1px dashed var(--el-border-color);
+  border: 1px dashed #d9d9d9;
   border-radius: 6px;
   cursor: pointer;
   position: relative;
@@ -550,7 +551,7 @@ onMounted(() => {
 }
 
 .avatar-uploader .el-upload:hover {
-  border-color: var(--el-color-primary);
+  border-color: #409eff;
 }
 
 .el-icon.avatar-uploader-icon {
@@ -559,5 +560,9 @@ onMounted(() => {
   width: 120px;
   height: 120px;
   text-align: center;
+}
+
+.selections-class-select {
+  width: 150px;
 }
 </style>

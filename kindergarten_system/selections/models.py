@@ -22,6 +22,13 @@ class SelectionArea(models.Model):
         verbose_name='所属班级'
     )
     
+    # 添加最大选区数字段
+    max_selections = models.PositiveIntegerField(
+        '最大选区数',
+        default=10,
+        help_text='该选区最多可容纳的幼儿数量'
+    )
+    
     # 描述信息
     description = models.TextField(
         '选区描述', 
